@@ -51,20 +51,26 @@ public class PasswordManager {
 
     private boolean authenticate() {
         Scanner scanner = new Scanner(System.in);
-        System.out.print("Enter Master Password: ");
-        String enteredPassword = scanner.nextLine();
 
-        secretKey = deriveKey(enteredPassword, salt);
-        String encryptedEnteredPassword = encrypt(enteredPassword);
+        for (int attempts = 0; attempts < 3; attempts++) {
+            System.out.print("Enter Master Password: ");
+            String enteredPassword = scanner.nextLine();
 
-        if (!encryptedMasterPassword.equals(encryptedEnteredPassword)) {
+            secretKey = deriveKey(enteredPassword, salt);
+            String encryptedEnteredPassword = encrypt(enteredPassword);
+
+            if (encryptedMasterPassword.equals(encryptedEnteredPassword)) {
+                System.out.println("Access Granted.");
+                return true;
+            }
+
             System.out.println("Incorrect Password. Access Denied.");
-            return false;
         }
 
-        System.out.println("Access Granted.");
-        return true;
+        System.out.println("Too many failed attempts. Exiting.");
+        return false;
     }
+
 
     private void run() {
         Scanner scanner = new Scanner(System.in);
