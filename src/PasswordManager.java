@@ -115,9 +115,25 @@ public class PasswordManager {
         System.out.print("Enter Password: ");
         String password = scanner.nextLine();
 
-        String encryptedPassword = encrypt(password);
-        entries.add(new PasswordEntry(accountName, username, encryptedPassword));
-        System.out.println("Password added successfully.");
+        if (entryExists(entries, accountName)) {
+            System.out.println("Account with that name already exists!");
+        }
+        else {
+            String encryptedPassword = encrypt(password);
+            entries.add(new PasswordEntry(accountName, username, encryptedPassword));
+
+            System.out.println("Password added successfully.");
+        }
+    }
+
+    private boolean entryExists(List<PasswordEntry> entries, String newEntryAccountName) {
+        for (PasswordEntry entry : entries) {
+            if (entry.getAccountName().equals(newEntryAccountName)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void printEntry(PasswordEntry entry) {
