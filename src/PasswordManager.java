@@ -111,13 +111,23 @@ public class PasswordManager {
         }
     }
 
+    private String promptForNonEmptyInput(Scanner scanner, String prompt) {
+        String input;
+        while (true) {
+            System.out.print(prompt);
+            input = scanner.nextLine().trim();
+            if (!input.isEmpty()) {
+                break;
+            }
+            System.out.println("Input cannot be empty. Please try again.");
+        }
+        return input;
+    }
+
     private void addPassword(Scanner scanner) {
-        System.out.print("Enter Account Name: ");
-        String accountName = scanner.nextLine();
-        System.out.print("Enter Username: ");
-        String username = scanner.nextLine();
-        System.out.print("Enter Password: ");
-        String password = scanner.nextLine();
+        String accountName = promptForNonEmptyInput(scanner, "Enter Account Name: ");
+        String username = promptForNonEmptyInput(scanner, "Enter Username: ");
+        String password = promptForNonEmptyInput(scanner, "Enter Password: ");
 
         if (entryExists(entries, accountName)) {
             System.out.println("Account with that name already exists!");
@@ -162,15 +172,12 @@ public class PasswordManager {
     }
 
     private void updateEntry(Scanner scanner) {
-        System.out.print("Enter Account Name to edit: ");
-        String accountName = scanner.nextLine();
+        String accountName = promptForNonEmptyInput(scanner, "Enter Account Name to edit: ");
         Optional<PasswordEntry> result = findEntryByAccountName(entries, accountName);
 
         if (result.isPresent()) {
-            System.out.print("Enter New Username: ");
-            String username = scanner.nextLine();
-            System.out.print("Enter New Password: ");
-            String password = scanner.nextLine();
+            String username = promptForNonEmptyInput(scanner, "Enter New Username: ");
+            String password = promptForNonEmptyInput(scanner, "Enter New Password: ");
 
             entries.stream().filter(p -> p.getAccountName().equals(accountName))
                     .findFirst()
