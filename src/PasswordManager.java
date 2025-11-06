@@ -81,7 +81,8 @@ public class PasswordManager {
             System.out.println("2. View Passwords");
             System.out.println("3. Remove Password");
             System.out.println("4. Search Account");
-            System.out.println("5. Exit");
+            System.out.println("5. Update Entry");
+            System.out.println("6. Exit");
             System.out.print("Choose an option: ");
             int choice = scanner.nextInt();
             scanner.nextLine();
@@ -100,6 +101,9 @@ public class PasswordManager {
                     searchPasswordsByAccountName(scanner);
                     break;
                 case 5:
+                    updateEntry(scanner);
+                    break;
+                case 6:
                     return;
                 default:
                     System.out.println("Invalid option. Please try again.");
@@ -157,15 +161,50 @@ public class PasswordManager {
         System.out.println("Password removed successfully.");
     }
 
+    private void updateEntry(Scanner scanner) {
+        System.out.print("Enter Account Name to edit: ");
+        String accountName = scanner.nextLine();
+        Optional<PasswordEntry> result = findEntryByAccountName(entries, accountName);
+
+        if (result.isPresent()) {
+            System.out.print("Enter New Username: ");
+            String username = scanner.nextLine();
+            System.out.print("Enter New Password: ");
+            String password = scanner.nextLine();
+
+            entries.stream().filter(p -> p.getAccountName().equals(accountName))
+                    .findFirst()
+                    .ifPresent(p ->  {
+                                p.setUsername(username);
+                                p.setEncryptedPassword(encrypt(password));
+                            }
+                    );
+
+            System.out.println("Entry updated successfully.");
+        }
+        else {
+            System.out.println("Entry not found.");
+        }
+    }
+
     private void searchPasswordsByAccountName(Scanner scanner) {
         System.out.print("Enter Account Name: ");
         String accountName = scanner.nextLine();
 
-        for (PasswordEntry entry : entries) {
-            if (entry.getAccountName().contains(accountName)) {
-                printEntry(entry);
-            }
+        Optional<PasswordEntry> result = findEntryByAccountName(entries, accountName);
+
+        if (result.isPresent()) {
+            printEntry(result.get());
         }
+        else {
+            System.out.println("Entry not found.");
+        }
+    }
+
+    private Optional<PasswordEntry> findEntryByAccountName(List<PasswordEntry> entries, String accountName) {
+        return entries.stream()
+                .filter(p -> p.getAccountName().equalsIgnoreCase(accountName))
+                .findFirst();
     }
 
     private String encrypt(String plain) {

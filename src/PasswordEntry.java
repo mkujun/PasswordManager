@@ -3,6 +3,15 @@ import java.io.Serializable;
 public class PasswordEntry implements Serializable {
     private String accountName;
     private String username;
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public void setEncryptedPassword(String encryptedPassword) {
+        this.encryptedPassword = encryptedPassword;
+    }
+
     private String encryptedPassword;
 
     public PasswordEntry(String accountName, String username, String encryptedPassword) {
