@@ -9,7 +9,7 @@ A lightweight, console-based password manager written in **Java**, designed to s
 - 🧂 Uses randomly generated **salt** for key uniqueness
 - 📁 Stores encrypted passwords in a local file (`passwords.dat`)
 - 🖥️ Simple interactive **command-line interface**
-- 🧹 Add, view, search, and remove password entries
+- 🧹 Add, view, search, update and remove password entries
 - ✅ No need to save any key files!
 
 ---
