@@ -11,9 +11,15 @@ Instead of saving an encryption key in a file, this app uses **PBKDF2 (Password-
 * 🧠 Key derived via **PBKDF2WithHmacSHA256** from master password
 * 🧂 Uses randomly generated **salt** for key uniqueness
 * 📁 Stores encrypted passwords in a local file (`passwords.dat`)
+* 🧱 Clean modular architecture with clear responsibilities:
+    - PersistenceService → file I/O
+    - PasswordRepository → data management
+    - CryptoService → encryption/decryption
+    - PasswordManager → user-facing CLI logic
 * 🖥️ Simple interactive **command-line interface**
 * 🧹 Add, view, search, update, and remove password entries
 * ✅ No need to save any key files!
+* ✅ Fully unit tested with JUnit 4
 
 ---
 
@@ -25,10 +31,16 @@ Instead of saving an encryption key in a file, this app uses **PBKDF2 (Password-
 project-root/
  ├── src/
  │   ├── PasswordManager.java
+ │   ├── CryptoService.java
+ │   ├── PasswordRepository.java
+ │   ├── PasswordService.java
  │   └── PasswordEntry.java
  ├── test/
- │   ├── PasswordEntryTest.java
- │   └── PasswordManagerTest.java
+ │   ├── PasswordManagerTest.java
+ │   ├── CryptoServiceTest.java
+ │   ├── PasswordRepositoryTest.java
+ │   ├── PasswordServiceTest.java
+ │   └── PasswordEntryTest.java
  ├── lib/
  │   ├── junit-4.13.2.jar
  │   └── hamcrest-core-1.3.jar
@@ -74,7 +86,11 @@ Example:
 
 ```bash
 javac -cp ".:lib/*" src/*.java test/*.java -d out
-java -cp ".:lib/*:out" org.junit.runner.JUnitCore PasswordEntryTest
+java -cp ".;lib/*;out" org.junit.runner.JUnitCore ^
+  PersistenceServiceTest ^
+  PasswordRepositoryTest ^
+  CryptoServiceTest ^
+  PasswordManagerTest
 ```
 
 If all tests pass, you’ll see:
