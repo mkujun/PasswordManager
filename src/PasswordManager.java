@@ -1,39 +1,38 @@
-import javax.crypto.*;
-import javax.crypto.spec.*;
-import java.io.*;
-import java.security.*;
-import java.util.*;
-import java.util.Base64;
+import java.io.File;
+import java.util.Optional;
+import java.util.Scanner;
 
 public class PasswordManager {
     private static final String FILE_NAME = "passwords.dat";
     private static final String INIT_MESSAGE = "No master password found. Setting up a new master password.";
-    private static final int SALT_LENGTH = 16;
 
-    private static SecretKey secretKey;
-    private byte[] salt;
-    private String encryptedMasterPassword;
-    private List<PasswordEntry> entries = new ArrayList<>();
+    private CryptoService crypto;
 
     public static void main(String[] args) {
-        PasswordManager manager = new PasswordManager();
-        if (manager.initialize()) {
-            manager.run();
-            manager.saveEntries();
-        }
+        new PasswordManager().start();
     }
 
-    private boolean initialize() {
+    public void start() {
+        PersistenceService persistence = new PersistenceService(FILE_NAME);
+        PasswordRepository repository = new PasswordRepository(persistence);
+        crypto = new CryptoService(repository);
+
+        if (!initialize(repository)) return;
+
+        run();
+        crypto.saveAll();
+    }
+
+    private boolean initialize(PasswordRepository repository) {
         File file = new File(FILE_NAME);
-        if (!file.exists()) {
+
+        if (!file.exists() || repository.getEncryptedMasterPassword() == null) {
             System.out.println(INIT_MESSAGE);
             setMasterPassword();
-        } else {
-            loadEntries();
-            if (!authenticate()) {
-                return false;
-            }
+        } else if (!crypto.authenticate()) {
+            return false;
         }
+
         return true;
     }
 
@@ -41,36 +40,8 @@ public class PasswordManager {
         Scanner scanner = new Scanner(System.in);
         System.out.print("Set your Master Password: ");
         String masterPassword = scanner.nextLine();
-
-        salt = generateSalt();
-        secretKey = deriveKey(masterPassword, salt);
-        encryptedMasterPassword = encrypt(masterPassword);
-
-        saveEntries();
+        crypto.setMasterPassword(masterPassword);
     }
-
-    private boolean authenticate() {
-        Scanner scanner = new Scanner(System.in);
-
-        for (int attempts = 0; attempts < 3; attempts++) {
-            System.out.print("Enter Master Password: ");
-            String enteredPassword = scanner.nextLine();
-
-            secretKey = deriveKey(enteredPassword, salt);
-            String encryptedEnteredPassword = encrypt(enteredPassword);
-
-            if (encryptedMasterPassword.equals(encryptedEnteredPassword)) {
-                System.out.println("Access Granted.");
-                return true;
-            }
-
-            System.out.println("Incorrect Password. Access Denied.");
-        }
-
-        System.out.println("Too many failed attempts. Exiting.");
-        return false;
-    }
-
 
     private void run() {
         Scanner scanner = new Scanner(System.in);
@@ -88,190 +59,62 @@ public class PasswordManager {
             scanner.nextLine();
 
             switch (choice) {
-                case 1:
-                    addPassword(scanner);
+                case 1: addPassword(scanner);
                     break;
-                case 2:
-                    viewPasswords();
+                case 2: viewPasswords();
                     break;
-                case 3:
-                    removePassword(scanner);
+                case 3: removePassword(scanner);
                     break;
-                case 4:
-                    searchPasswordsByAccountName(scanner);
+                case 4: searchPasswords(scanner);
                     break;
-                case 5:
-                    updateEntry(scanner);
+                case 5: updateEntry(scanner);
                     break;
-                case 6:
-                    return;
-                default:
-                    System.out.println("Invalid option. Please try again.");
+                case 6: { return; }
+                default : System.out.println("Invalid option. Try again.");
             }
         }
-    }
-
-    private String promptForNonEmptyInput(Scanner scanner, String prompt) {
-        String input;
-        while (true) {
-            System.out.print(prompt);
-            input = scanner.nextLine().trim();
-            if (!input.isEmpty()) {
-                break;
-            }
-            System.out.println("Input cannot be empty. Please try again.");
-        }
-        return input;
     }
 
     private void addPassword(Scanner scanner) {
-        String accountName = promptForNonEmptyInput(scanner, "Enter Account Name: ");
-        String username = promptForNonEmptyInput(scanner, "Enter Username: ");
-        String password = promptForNonEmptyInput(scanner, "Enter Password: ");
-
-        if (entryExists(entries, accountName)) {
-            System.out.println("Account with that name already exists!");
-        }
-        else {
-            String encryptedPassword = encrypt(password);
-            entries.add(new PasswordEntry(accountName, username, encryptedPassword));
-
-            System.out.println("Password added successfully.");
-        }
-    }
-
-    private boolean entryExists(List<PasswordEntry> entries, String newEntryAccountName) {
-        for (PasswordEntry entry : entries) {
-            if (entry.getAccountName().equals(newEntryAccountName)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private void printEntry(PasswordEntry entry) {
-        String decrypted = decrypt(entry.getEncryptedPassword());
-        System.out.println("Account: " + entry.getAccountName());
-        System.out.println("Username: " + entry.getUsername());
-        System.out.println("Password: " + decrypted);
-        System.out.println();
-    }
-
-    private void viewPasswords() {
-        for (PasswordEntry entry : entries) {
-            printEntry(entry);
-        }
+        String account = prompt(scanner, "Enter Account Name: ");
+        String user = prompt(scanner, "Enter Username: ");
+        String pass = prompt(scanner, "Enter Password: ");
+        crypto.addPassword(account, user, pass);
     }
 
     private void removePassword(Scanner scanner) {
-        System.out.print("Enter Account Name to remove: ");
-        String accountName = scanner.nextLine();
-        entries.removeIf(e -> e.getAccountName().equalsIgnoreCase(accountName));
-        System.out.println("Password removed successfully.");
+        String account = prompt(scanner, "Enter Account Name to remove: ");
+        boolean removed = crypto.removePassword(account);
+        System.out.println(removed ? "Password removed successfully." : "Account not found.");
+    }
+
+    private void viewPasswords() {
+        crypto.getAllEntries().forEach(this::printEntry);
+    }
+
+    private void searchPasswords(Scanner scanner) {
+        String account = prompt(scanner, "Enter Account Name: ");
+        Optional<PasswordEntry> result = crypto.findEntryByAccountName(account);
+        if (result.isPresent()) printEntry(result.get());
+        else System.out.println("Entry not found.");
     }
 
     private void updateEntry(Scanner scanner) {
-        String accountName = promptForNonEmptyInput(scanner, "Enter Account Name to edit: ");
-        Optional<PasswordEntry> result = findEntryByAccountName(entries, accountName);
-
-        if (result.isPresent()) {
-            String username = promptForNonEmptyInput(scanner, "Enter New Username: ");
-            String password = promptForNonEmptyInput(scanner, "Enter New Password: ");
-
-            entries.stream().filter(p -> p.getAccountName().equals(accountName))
-                    .findFirst()
-                    .ifPresent(p ->  {
-                                p.setUsername(username);
-                                p.setEncryptedPassword(encrypt(password));
-                            }
-                    );
-
-            System.out.println("Entry updated successfully.");
-        }
-        else {
-            System.out.println("Entry not found.");
-        }
+        String account = prompt(scanner, "Enter Account Name: ");
+        String user = prompt(scanner, "Enter New Username: ");
+        String pass = prompt(scanner, "Enter New Password: ");
+        crypto.updateEntry(account, user, pass);
     }
 
-    private void searchPasswordsByAccountName(Scanner scanner) {
-        System.out.print("Enter Account Name: ");
-        String accountName = scanner.nextLine();
-
-        Optional<PasswordEntry> result = findEntryByAccountName(entries, accountName);
-
-        if (result.isPresent()) {
-            printEntry(result.get());
-        }
-        else {
-            System.out.println("Entry not found.");
-        }
+    private String prompt(Scanner scanner, String msg) {
+        System.out.print(msg);
+        return scanner.nextLine().trim();
     }
 
-    private Optional<PasswordEntry> findEntryByAccountName(List<PasswordEntry> entries, String accountName) {
-        return entries.stream()
-                .filter(p -> p.getAccountName().equalsIgnoreCase(accountName))
-                .findFirst();
-    }
-
-    private String encrypt(String plain) {
-        try {
-            Cipher cipher = Cipher.getInstance("AES");
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey);
-            byte[] encrypted = cipher.doFinal(plain.getBytes());
-            return Base64.getEncoder().encodeToString(encrypted);
-        } catch (Exception e) {
-            throw new RuntimeException("Encryption error", e);
-        }
-    }
-
-    private String decrypt(String encoded) {
-        try {
-            Cipher cipher = Cipher.getInstance("AES");
-            cipher.init(Cipher.DECRYPT_MODE, secretKey);
-            byte[] decoded = Base64.getDecoder().decode(encoded);
-            return new String(cipher.doFinal(decoded));
-        } catch (Exception e) {
-            throw new RuntimeException("Decryption error", e);
-        }
-    }
-
-    private void loadEntries() {
-        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(FILE_NAME))) {
-            salt = (byte[]) ois.readObject();
-            encryptedMasterPassword = (String) ois.readObject();
-            entries = (List<PasswordEntry>) ois.readObject();
-        } catch (IOException | ClassNotFoundException e) {
-            System.out.println("Failed to load saved data. Starting fresh.");
-        }
-    }
-
-    private void saveEntries() {
-        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(FILE_NAME))) {
-            oos.writeObject(salt);
-            oos.writeObject(encryptedMasterPassword);
-            oos.writeObject(entries);
-        } catch (IOException e) {
-            System.out.println("Error saving data: " + e.getMessage());
-        }
-    }
-
-    private byte[] generateSalt() {
-        byte[] s = new byte[SALT_LENGTH];
-        new SecureRandom().nextBytes(s);
-        return s;
-    }
-
-    private SecretKey deriveKey(String password, byte[] salt) {
-        try {
-            int iterations = 65536;
-            int keyLen = 128;
-            PBEKeySpec spec = new PBEKeySpec(password.toCharArray(), salt, iterations, keyLen);
-            SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-            byte[] keyBytes = factory.generateSecret(spec).getEncoded();
-            return new SecretKeySpec(keyBytes, "AES");
-        } catch (Exception e) {
-            throw new RuntimeException("Key derivation failed", e);
-        }
+    private void printEntry(PasswordEntry entry) {
+        String decrypted = crypto.decrypt(entry.getEncryptedPassword());
+        System.out.println("\nAccount: " + entry.getAccountName());
+        System.out.println("Username: " + entry.getUsername());
+        System.out.println("Password: " + decrypted);
     }
 }
