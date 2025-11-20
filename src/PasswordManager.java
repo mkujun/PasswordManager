@@ -1,5 +1,6 @@
+import javax.crypto.SecretKey;
 import java.io.File;
-import java.util.Optional;
+import java.util.Map;
 import java.util.Scanner;
 
 public class PasswordManager {
@@ -7,6 +8,9 @@ public class PasswordManager {
     private static final String INIT_MESSAGE = "No master password found. Setting up a new master password.";
 
     private CryptoService crypto;
+    private PasswordRepository repository;
+
+    public SecretKey secretKey;
 
     public static void main(String[] args) {
         new PasswordManager().start();
@@ -14,13 +18,13 @@ public class PasswordManager {
 
     public void start() {
         PersistenceService persistence = new PersistenceService(FILE_NAME);
-        PasswordRepository repository = new PasswordRepository(persistence);
-        crypto = new CryptoService(repository);
+        repository = new PasswordRepository(persistence);
+        crypto = new CryptoService();
 
         if (!initialize(repository)) return;
 
         run();
-        crypto.saveAll();
+        repository.save();
     }
 
     private boolean initialize(PasswordRepository repository) {
@@ -29,18 +33,43 @@ public class PasswordManager {
         if (!file.exists() || repository.getEncryptedMasterPassword() == null) {
             System.out.println(INIT_MESSAGE);
             setMasterPassword();
-        } else if (!crypto.authenticate()) {
+        } else if (!authenticate()) {
             return false;
         }
 
         return true;
     }
 
-    private void setMasterPassword() {
+    private boolean authenticate() {
         Scanner scanner = new Scanner(System.in);
-        System.out.print("Set your Master Password: ");
-        String masterPassword = scanner.nextLine();
-        crypto.setMasterPassword(masterPassword);
+        for (int i = 0; i < 3; i++) {
+            String enteredPassword = prompt(scanner, "Enter Master Password: ");
+            secretKey = crypto.deriveKey(enteredPassword, repository.getSalt());
+
+            String encryptedEnteredPassword = crypto.encrypt(enteredPassword, secretKey);
+
+            if (encryptedEnteredPassword.equals(repository.getEncryptedMasterPassword())) {
+                System.out.println("Access Granted.");
+                return true;
+            }
+
+            System.out.println("Incorrect Password. Access Denied.");
+        }
+        System.out.println("Too many failed attempts. Exiting.");
+
+        return false;
+    }
+
+    private void setMasterPassword() {
+        String masterPassword = prompt(new Scanner(System.in), "Set your Master Password: ");
+
+        byte[]salt = crypto.generateSalt();
+        repository.setSalt(salt);
+
+        secretKey = crypto.deriveKey(masterPassword, salt);
+        repository.setEncryptedMasterPassword(crypto.encrypt(masterPassword, secretKey));
+
+        repository.save();
     }
 
     private void run() {
@@ -77,33 +106,55 @@ public class PasswordManager {
 
     private void addPassword(Scanner scanner) {
         String account = prompt(scanner, "Enter Account Name: ");
-        String user = prompt(scanner, "Enter Username: ");
-        String pass = prompt(scanner, "Enter Password: ");
-        crypto.addPassword(account, user, pass);
+
+        if (repository.find(account) != null) {
+            System.out.println("Account with that name already exists!");
+        }
+        else {
+            String user = prompt(scanner, "Enter Username: ");
+            String pass = prompt(scanner, "Enter Password: ");
+            String encrypted = crypto.encrypt(pass, secretKey);
+            repository.add(new PasswordEntry(account, user, encrypted));
+        }
     }
 
     private void removePassword(Scanner scanner) {
         String account = prompt(scanner, "Enter Account Name to remove: ");
-        boolean removed = crypto.removePassword(account);
-        System.out.println(removed ? "Password removed successfully." : "Account not found.");
+        System.out.println(repository.remove(account) ? "Password removed successfully." : "Account not found.");
     }
 
     private void viewPasswords() {
-        crypto.getAllEntries().forEach(this::printEntry);
+        Map<String, PasswordEntry> entries = repository.getEntries();
+        entries.values().forEach(this::printEntry);
     }
 
     private void searchPasswords(Scanner scanner) {
         String account = prompt(scanner, "Enter Account Name: ");
-        Optional<PasswordEntry> result = crypto.findEntryByAccountName(account);
-        if (result.isPresent()) printEntry(result.get());
-        else System.out.println("Entry not found.");
+
+        PasswordEntry entry = repository.find(account);
+
+        if (entry != null) {
+            printEntry(entry);
+        }
+        else {
+            System.out.println("Entry not found.");
+        }
     }
 
     private void updateEntry(Scanner scanner) {
         String account = prompt(scanner, "Enter Account Name: ");
-        String user = prompt(scanner, "Enter New Username: ");
-        String pass = prompt(scanner, "Enter New Password: ");
-        crypto.updateEntry(account, user, pass);
+
+        if (repository.find(account) == null) {
+            System.out.println("Account with that name does not exists!");
+        }
+        else {
+            String user = prompt(scanner, "Enter New Username: ");
+            String pass = prompt(scanner, "Enter New Password: ");
+            String encrypted = crypto.encrypt(pass, secretKey);
+            if(repository.update(account, user, encrypted)) {
+                System.out.println("Account updated!");
+            }
+        }
     }
 
     private String prompt(Scanner scanner, String msg) {
@@ -112,7 +163,7 @@ public class PasswordManager {
     }
 
     private void printEntry(PasswordEntry entry) {
-        String decrypted = crypto.decrypt(entry.getEncryptedPassword());
+        String decrypted = crypto.decrypt(entry.getEncryptedPassword(), secretKey);
         System.out.println("\nAccount: " + entry.getAccountName());
         System.out.println("Username: " + entry.getUsername());
         System.out.println("Password: " + decrypted);

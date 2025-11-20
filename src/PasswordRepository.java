@@ -1,12 +1,12 @@
-import java.util.List;
-import java.util.Optional;
+import java.util.HashMap;
 
 public class PasswordRepository {
 
     private final PersistenceService persistence;
     private byte[] salt;
     private String encryptedMasterPassword;
-    private List<PasswordEntry> entries;
+
+    private final HashMap<String, PasswordEntry> entries;
 
     public PasswordRepository(PersistenceService persistence) {
         this.persistence = persistence;
@@ -17,51 +17,46 @@ public class PasswordRepository {
             this.encryptedMasterPassword = data.encryptedMasterPassword;
             this.entries = data.entries;
         } else {
-            this.entries = new java.util.ArrayList<>();
+            this.entries = new HashMap<String, PasswordEntry>();
         }
-    }
-
-    public List<PasswordEntry> getAll() {
-        return entries;
-    }
-
-    public Optional<PasswordEntry> findByAccountName(String accountName) {
-        return entries.stream()
-                .filter(e -> e.getAccountName().equalsIgnoreCase(accountName))
-                .findFirst();
     }
 
     public boolean add(PasswordEntry entry) {
-        if (findByAccountName(entry.getAccountName()).isPresent()) {
-            return false;
-        }
-        entries.add(entry);
-        return true;
+        return entries.putIfAbsent(entry.getUsername(), entry) == null;
     }
 
     public boolean remove(String accountName) {
-        return entries.removeIf(e -> e.getAccountName().equalsIgnoreCase(accountName));
+        return entries.remove(accountName) != null;
     }
 
     public boolean update(String accountName, String username, String encryptedPassword) {
-        return findByAccountName(accountName)
-                .map(e -> {
-                    e.setUsername(username);
-                    e.setEncryptedPassword(encryptedPassword);
-                    return true;
-                })
-                .orElse(false);
+        return entries.replace(accountName, new PasswordEntry(accountName, username, encryptedPassword)) != null;
+    }
+
+    public PasswordEntry find(String accountName) {
+        return entries.get(accountName);
     }
 
     public void save() {
         persistence.save(salt, encryptedMasterPassword, entries);
     }
 
-    // --- Accessors for CryptoService ---
-    public byte[] getSalt() { return salt; }
-    public void setSalt(byte[] salt) { this.salt = salt; }
+    public byte[] getSalt() {
+        return salt;
+    }
 
-    public String getEncryptedMasterPassword() { return encryptedMasterPassword; }
+    public void setSalt(byte[] salt) {
+        this.salt = salt;
+    }
+
+    public HashMap<String, PasswordEntry> getEntries() {
+        return entries;
+    }
+
+    public String getEncryptedMasterPassword() {
+        return encryptedMasterPassword;
+    }
+
     public void setEncryptedMasterPassword(String encryptedMasterPassword) {
         this.encryptedMasterPassword = encryptedMasterPassword;
     }

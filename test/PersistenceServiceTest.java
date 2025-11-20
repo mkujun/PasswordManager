@@ -22,8 +22,8 @@ public class PersistenceServiceTest {
     public void testSaveAndLoad() {
         byte[] salt = new byte[]{1, 2, 3, 4};
         String encryptedMasterPassword = "abc123";
-        List<PasswordEntry> entries = new ArrayList<>();
-        entries.add(new PasswordEntry("Gmail", "user", "enc123"));
+        HashMap<String, PasswordEntry> entries = new HashMap<>();
+        entries.put("Gmail", new PasswordEntry("Gmail", "user", "enc123"));
 
         persistence.save(salt, encryptedMasterPassword, entries);
 
