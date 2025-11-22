@@ -1,3 +1,7 @@
+package crypto;
+
+import interfaces.ICryptoService;
+
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
@@ -6,7 +10,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.security.SecureRandom;
 import java.util.Base64;
 
-public class CryptoService {
+public class CryptoService implements ICryptoService {
     private static final int SALT_LENGTH = 16;
     private static final int ITERATIONS = 65536;
     private static final int KEY_LENGTH = 128;

@@ -1,44 +1,64 @@
-import org.junit.*;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+
 import java.io.File;
-import java.util.*;
+import java.util.HashMap;
+
+import model.PasswordEntry;
+import persistence.PersistenceService;
+import interfaces.IPersistenceService;
+
 import static org.junit.Assert.*;
 
 public class PersistenceServiceTest {
 
-    private static final String TEST_FILE = "test_passwords.dat";
-    private PersistenceService persistence;
+    private File tempFile;
+    private PersistenceService persistenceService;
 
     @Before
-    public void setUp() {
-        persistence = new PersistenceService(TEST_FILE);
+    public void setUp() throws Exception {
+        tempFile = File.createTempFile("passwords", ".dat");
+        tempFile.deleteOnExit();
+        persistenceService = new PersistenceService(tempFile.getAbsolutePath());
     }
 
     @After
     public void tearDown() {
-        new File(TEST_FILE).delete();
+        tempFile.delete();
     }
 
     @Test
     public void testSaveAndLoad() {
-        byte[] salt = new byte[]{1, 2, 3, 4};
-        String encryptedMasterPassword = "abc123";
+        byte[] salt = new byte[]{1, 2, 3};
+        String encryptedMaster = "encrypted123";
+
         HashMap<String, PasswordEntry> entries = new HashMap<>();
-        entries.put("Gmail", new PasswordEntry("Gmail", "user", "enc123"));
+        entries.put("gmail", new PasswordEntry("gmail", "user1", "enc-pass-1"));
+        entries.put("facebook", new PasswordEntry("facebook", "user2", "enc-pass-2"));
 
-        persistence.save(salt, encryptedMasterPassword, entries);
+        // Save
+        persistenceService.save(salt, encryptedMaster, entries);
 
-        PersistenceService.LoadedData data = persistence.load();
+        // Load
+        IPersistenceService.LoadedData data = persistenceService.load();
+
         assertNotNull(data);
         assertArrayEquals(salt, data.salt);
-        assertEquals(encryptedMasterPassword, data.encryptedMasterPassword);
-        assertEquals(1, data.entries.size());
-        assertEquals("Gmail", data.entries.get(0).getAccountName());
+        assertEquals(encryptedMaster, data.encryptedMasterPassword);
+
+        assertEquals(2, data.entries.size());
+        assertTrue(data.entries.containsKey("gmail"));
+        assertTrue(data.entries.containsKey("facebook"));
     }
 
     @Test
-    public void testLoadFromMissingFileReturnsNull() {
-        new File(TEST_FILE).delete();
-        PersistenceService.LoadedData data = persistence.load();
+    public void testLoadReturnsNullWhenFileMissing() {
+        // delete file manually
+        tempFile.delete();
+
+        IPersistenceService.LoadedData data = persistenceService.load();
+
         assertNull(data);
     }
 }

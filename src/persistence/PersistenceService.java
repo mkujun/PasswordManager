@@ -1,7 +1,12 @@
+package persistence;
+
+import interfaces.IPersistenceService;
+import model.PasswordEntry;
+
 import java.io.*;
 import java.util.HashMap;
 
-public class PersistenceService {
+public class PersistenceService implements IPersistenceService {
 
     private final String fileName;
 
@@ -29,18 +34,6 @@ public class PersistenceService {
         } catch (IOException | ClassNotFoundException e) {
             System.out.println("No existing data found. Starting fresh.");
             return null;
-        }
-    }
-
-    public static class LoadedData {
-        public final byte[] salt;
-        public final String encryptedMasterPassword;
-        public final HashMap<String, PasswordEntry> entries;
-
-        public LoadedData(byte[] salt, String encryptedMasterPassword, HashMap<String,PasswordEntry> entries) {
-            this.salt = salt;
-            this.encryptedMasterPassword = encryptedMasterPassword;
-            this.entries = entries;
         }
     }
 }

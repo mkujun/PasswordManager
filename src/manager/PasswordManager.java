@@ -1,36 +1,35 @@
+package manager;
+
+import interfaces.ICryptoService;
+import interfaces.IPasswordManager;
+import interfaces.IPasswordRepository;
+import model.PasswordEntry;
+
 import javax.crypto.SecretKey;
-import java.io.File;
 import java.util.Map;
 import java.util.Scanner;
 
-public class PasswordManager {
-    private static final String FILE_NAME = "passwords.dat";
+public class PasswordManager implements IPasswordManager {
     private static final String INIT_MESSAGE = "No master password found. Setting up a new master password.";
 
-    private CryptoService crypto;
-    private PasswordRepository repository;
+    private final ICryptoService crypto;
+    private final IPasswordRepository repository;
 
     public SecretKey secretKey;
 
-    public static void main(String[] args) {
-        new PasswordManager().start();
+    public PasswordManager(ICryptoService crypto, IPasswordRepository repository) {
+        this.crypto = crypto;
+        this.repository = repository;
     }
 
     public void start() {
-        PersistenceService persistence = new PersistenceService(FILE_NAME);
-        repository = new PasswordRepository(persistence);
-        crypto = new CryptoService();
-
-        if (!initialize(repository)) return;
+        if (!initialize()) return;
 
         run();
-        repository.save();
     }
 
-    private boolean initialize(PasswordRepository repository) {
-        File file = new File(FILE_NAME);
-
-        if (!file.exists() || repository.getEncryptedMasterPassword() == null) {
+    public boolean initialize() {
+        if (repository.getEncryptedMasterPassword() == null) {
             System.out.println(INIT_MESSAGE);
             setMasterPassword();
         } else if (!authenticate()) {
@@ -40,7 +39,7 @@ public class PasswordManager {
         return true;
     }
 
-    private boolean authenticate() {
+    public boolean authenticate() {
         Scanner scanner = new Scanner(System.in);
         for (int i = 0; i < 3; i++) {
             String enteredPassword = prompt(scanner, "Enter Master Password: ");
@@ -60,7 +59,7 @@ public class PasswordManager {
         return false;
     }
 
-    private void setMasterPassword() {
+    public void setMasterPassword() {
         String masterPassword = prompt(new Scanner(System.in), "Set your Master Password: ");
 
         byte[]salt = crypto.generateSalt();
@@ -72,7 +71,7 @@ public class PasswordManager {
         repository.save();
     }
 
-    private void run() {
+    public void run() {
         Scanner scanner = new Scanner(System.in);
 
         while (true) {
@@ -94,7 +93,7 @@ public class PasswordManager {
                     break;
                 case 3: removePassword(scanner);
                     break;
-                case 4: searchPasswords(scanner);
+                case 4: searchPassword(scanner);
                     break;
                 case 5: updateEntry(scanner);
                     break;
@@ -104,7 +103,7 @@ public class PasswordManager {
         }
     }
 
-    private void addPassword(Scanner scanner) {
+    public void addPassword(Scanner scanner) {
         String account = prompt(scanner, "Enter Account Name: ");
 
         if (repository.find(account) != null) {
@@ -115,20 +114,21 @@ public class PasswordManager {
             String pass = prompt(scanner, "Enter Password: ");
             String encrypted = crypto.encrypt(pass, secretKey);
             repository.add(new PasswordEntry(account, user, encrypted));
+            repository.save();
         }
     }
 
-    private void removePassword(Scanner scanner) {
+    public void removePassword(Scanner scanner) {
         String account = prompt(scanner, "Enter Account Name to remove: ");
         System.out.println(repository.remove(account) ? "Password removed successfully." : "Account not found.");
     }
 
-    private void viewPasswords() {
+    public void viewPasswords() {
         Map<String, PasswordEntry> entries = repository.getEntries();
         entries.values().forEach(this::printEntry);
     }
 
-    private void searchPasswords(Scanner scanner) {
+    public void searchPassword(Scanner scanner) {
         String account = prompt(scanner, "Enter Account Name: ");
 
         PasswordEntry entry = repository.find(account);
@@ -141,7 +141,7 @@ public class PasswordManager {
         }
     }
 
-    private void updateEntry(Scanner scanner) {
+    public void updateEntry(Scanner scanner) {
         String account = prompt(scanner, "Enter Account Name: ");
 
         if (repository.find(account) == null) {

@@ -1,14 +1,21 @@
+package repository;
+
+import interfaces.IPasswordRepository;
+import interfaces.IPersistenceService;
+import model.PasswordEntry;
+import persistence.PersistenceService;
+
 import java.util.HashMap;
 
-public class PasswordRepository {
+public class PasswordRepository implements IPasswordRepository {
 
-    private final PersistenceService persistence;
+    private final IPersistenceService persistence;
     private byte[] salt;
     private String encryptedMasterPassword;
 
     private final HashMap<String, PasswordEntry> entries;
 
-    public PasswordRepository(PersistenceService persistence) {
+    public PasswordRepository(IPersistenceService persistence) {
         this.persistence = persistence;
         PersistenceService.LoadedData data = persistence.load();
 

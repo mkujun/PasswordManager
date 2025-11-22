@@ -12,10 +12,10 @@ Instead of saving an encryption key in a file, this app uses **PBKDF2 (Password-
 * 🧂 Uses randomly generated **salt** for key uniqueness
 * 📁 Stores encrypted passwords in a local file (`passwords.dat`)
 * 🧱 Clean modular architecture with clear responsibilities:
-    - PersistenceService → file I/O
-    - PasswordRepository → data management
-    - CryptoService → encryption/decryption
-    - PasswordManager → user-facing CLI logic
+    - persistence.PersistenceService → file I/O
+    - repository.PasswordRepository → data management
+    - crypto.CryptoService → encryption/decryption
+    - manager.PasswordManager → user-facing CLI logic
 * 🖥️ Simple interactive **command-line interface**
 * 🧹 Add, view, search, update, and remove password entries
 * ✅ No need to save any key files!
@@ -30,11 +30,11 @@ Instead of saving an encryption key in a file, this app uses **PBKDF2 (Password-
 ```
 project-root/
  ├── src/
- │   ├── PasswordManager.java
- │   ├── CryptoService.java
- │   ├── PasswordRepository.java
+ │   ├── manager.PasswordManager.java
+ │   ├── crypto.CryptoService.java
+ │   ├── repository.PasswordRepository.java
  │   ├── PasswordService.java
- │   └── PasswordEntry.java
+ │   └── model.PasswordEntry.java
  ├── test/
  │   ├── PasswordManagerTest.java
  │   ├── CryptoServiceTest.java
@@ -59,7 +59,7 @@ From the project root directory:
 javac src/*.java -d out
 
 # Run
-java -cp out PasswordManager
+java -cp out manager.PasswordManager
 ```
 
 ---
