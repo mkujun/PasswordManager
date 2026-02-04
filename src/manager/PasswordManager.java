@@ -113,7 +113,7 @@ public class PasswordManager implements IPasswordManager {
             String user = prompt(scanner, "Enter Username: ");
             String pass = prompt(scanner, "Enter Password: ");
             String encrypted = crypto.encrypt(pass, secretKey);
-            repository.add(new PasswordEntry(account, user, encrypted));
+            System.out.println(repository.add(new PasswordEntry(account, user, encrypted)) ? "Password added successfully.": "Password not added");
             repository.save();
         }
     }

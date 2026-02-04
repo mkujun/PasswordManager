@@ -29,7 +29,7 @@ public class PasswordRepository implements IPasswordRepository {
     }
 
     public boolean add(PasswordEntry entry) {
-        return entries.putIfAbsent(entry.getUsername(), entry) == null;
+        return entries.putIfAbsent(entry.getAccountName(), entry) == null;
     }
 
     public boolean remove(String accountName) {
