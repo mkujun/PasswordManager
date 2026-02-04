@@ -83,23 +83,27 @@ public class PasswordManager implements IPasswordManager {
             System.out.println("5. Update Entry");
             System.out.println("6. Exit");
             System.out.print("Choose an option: ");
-            int choice = scanner.nextInt();
-            scanner.nextLine();
 
-            switch (choice) {
-                case 1: addPassword(scanner);
-                    break;
-                case 2: viewPasswords();
-                    break;
-                case 3: removePassword(scanner);
-                    break;
-                case 4: searchPassword(scanner);
-                    break;
-                case 5: updateEntry(scanner);
-                    break;
-                case 6: { return; }
-                default : System.out.println("Invalid option. Try again.");
+            try {
+                int choice = Integer.parseInt(scanner.nextLine());
+                switch (choice) {
+                    case 1: addPassword(scanner);
+                        break;
+                    case 2: viewPasswords();
+                        break;
+                    case 3: removePassword(scanner);
+                        break;
+                    case 4: searchPassword(scanner);
+                        break;
+                    case 5: updateEntry(scanner);
+                        break;
+                    case 6: { return; }
+                    default : System.out.println("Invalid option. Try again.");
+                }
+            } catch (NumberFormatException e) {
+                System.out.println("You did not enter a number. Try again.");
             }
+
         }
     }
 
@@ -121,6 +125,7 @@ public class PasswordManager implements IPasswordManager {
     public void removePassword(Scanner scanner) {
         String account = prompt(scanner, "Enter Account Name to remove: ");
         System.out.println(repository.remove(account) ? "Password removed successfully." : "Account not found.");
+        repository.save();
     }
 
     public void viewPasswords() {
