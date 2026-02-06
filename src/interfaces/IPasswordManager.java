@@ -1,5 +1,7 @@
 package interfaces;
 
+import model.PasswordEntry;
+
 import java.util.Scanner;
 
 public interface IPasswordManager {
@@ -13,4 +15,6 @@ public interface IPasswordManager {
     void viewPasswords();
     void searchPassword(Scanner scanner);
     void updateEntry(Scanner scanner);
+    void importEntry(PasswordEntry entry, String newMasterPassword);
+    void updateMasterPassword();
 }

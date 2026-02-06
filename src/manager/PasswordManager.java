@@ -6,6 +6,7 @@ import interfaces.IPasswordRepository;
 import model.PasswordEntry;
 
 import javax.crypto.SecretKey;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Scanner;
 
@@ -96,7 +97,8 @@ public class PasswordManager implements IPasswordManager {
             System.out.println("3. Remove Password");
             System.out.println("4. Search Account");
             System.out.println("5. Update Entry");
-            System.out.println("6. Exit");
+            System.out.println("6. Update master password");
+            System.out.println("7. Exit");
             System.out.print("Choose an option: ");
 
             try {
@@ -112,7 +114,9 @@ public class PasswordManager implements IPasswordManager {
                         break;
                     case 5: updateEntry(scanner);
                         break;
-                    case 6: { return; }
+                    case 6: updateMasterPassword();
+                        break;
+                    case 7: { return; }
                     default : System.out.println("Invalid option. Try again.");
                 }
             } catch (NumberFormatException e) {
@@ -120,6 +124,23 @@ public class PasswordManager implements IPasswordManager {
             }
 
         }
+    }
+
+    public void updateMasterPassword() {
+        Map<String, PasswordEntry> entriesCopy = new HashMap<>(repository.getEntries());
+
+        setMasterPassword();
+        repository.dump();
+
+        entriesCopy.forEach((key, value) -> {
+            importEntry(value, repository.getEncryptedMasterPassword());
+        });
+
+        repository.save();
+    }
+
+    public void importEntry(PasswordEntry entry, String newMasterPassword) {
+        repository.add(new PasswordEntry(entry.getAccountName(), entry.getUsername(), newMasterPassword));
     }
 
     public void addPassword(Scanner scanner) {

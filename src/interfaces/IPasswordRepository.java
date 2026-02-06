@@ -15,4 +15,5 @@ public interface IPasswordRepository {
     String getEncryptedMasterPassword();
     void setEncryptedMasterPassword(String encryptedMasterPassword);
     Map<String, PasswordEntry> getEntries();
+    void dump();
 }

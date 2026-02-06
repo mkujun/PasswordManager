@@ -60,6 +60,12 @@ public class PasswordRepository implements IPasswordRepository {
         return entries;
     }
 
+    public void dump() {
+        this.entries.clear();
+        this.encryptedMasterPassword = "";
+        this.salt = null;
+    }
+
     public String getEncryptedMasterPassword() {
         return encryptedMasterPassword;
     }
