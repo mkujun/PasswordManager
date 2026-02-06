@@ -37,7 +37,7 @@ public class PasswordManagerTest {
         when(crypto.deriveKey(anyString(), any())).thenReturn(secretKey);
         when(crypto.encrypt(anyString(), any())).thenReturn("encrypted");
 
-        System.setIn(new ByteArrayInputStream("master123\n".getBytes()));
+        System.setIn(new ByteArrayInputStream("master123\nmaster123\n".getBytes()));
 
         boolean result = manager.initialize();
 

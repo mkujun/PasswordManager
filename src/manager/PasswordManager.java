@@ -60,15 +60,30 @@ public class PasswordManager implements IPasswordManager {
     }
 
     public void setMasterPassword() {
-        String masterPassword = prompt(new Scanner(System.in), "Set your Master Password: ");
+        while (true) {
+            Scanner scanner = new Scanner(System.in);
 
-        byte[]salt = crypto.generateSalt();
-        repository.setSalt(salt);
+            String masterPassword = prompt(scanner, "Set your Master Password: ");
+            if (masterPassword.isEmpty()) {
+                System.out.println("Password should not be empty!");
+                continue;
+            }
 
-        secretKey = crypto.deriveKey(masterPassword, salt);
-        repository.setEncryptedMasterPassword(crypto.encrypt(masterPassword, secretKey));
+            String repeatPassword = prompt(scanner, "Repeat your Master Password: ");
+            if (!masterPassword.equals(repeatPassword)) {
+                System.out.println("Passwords don't match! Enter master password again.");
+                continue;
+            }
 
-        repository.save();
+            byte[]salt = crypto.generateSalt();
+            repository.setSalt(salt);
+
+            secretKey = crypto.deriveKey(masterPassword, salt);
+            repository.setEncryptedMasterPassword(crypto.encrypt(masterPassword, secretKey));
+
+            repository.save();
+            break;
+        }
     }
 
     public void run() {
