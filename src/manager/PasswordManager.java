@@ -149,13 +149,22 @@ public class PasswordManager implements IPasswordManager {
         if (repository.find(account) != null) {
             System.out.println("Account with that name already exists!");
         }
+
+        String user = prompt(scanner, "Enter Username: ");
+        String pass = prompt(scanner, "Enter Password: ");
+
+        if (!isInputValid(user, pass, account)) {
+            System.out.println("All fields are required!");
+        }
         else {
-            String user = prompt(scanner, "Enter Username: ");
-            String pass = prompt(scanner, "Enter Password: ");
             String encrypted = crypto.encrypt(pass, secretKey);
             System.out.println(repository.add(new PasswordEntry(account, user, encrypted)) ? "Password added successfully.": "Password not added");
             repository.save();
         }
+    }
+
+    private boolean isInputValid(String user, String pass, String account) {
+        return !user.isEmpty() && !pass.isEmpty() && !account.isEmpty();
     }
 
     public void removePassword(Scanner scanner) {

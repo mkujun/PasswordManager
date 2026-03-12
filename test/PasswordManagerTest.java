@@ -10,6 +10,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.ByteArrayInputStream;
 import java.util.HashMap;
+import java.util.Scanner;
 
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
@@ -99,6 +100,20 @@ public class PasswordManagerTest {
         assertEquals("gmail", entry.getAccountName());
         assertEquals("user", entry.getUsername());
         assertEquals("encrypted", entry.getEncryptedPassword());
+    }
+
+    @Test
+    public void addPassword_shouldNotAdd_whenInputInvalid() {
+        when(repository.find("gmail")).thenReturn(null);
+
+        System.setIn(new ByteArrayInputStream(
+                "gmail\n\npass\n".getBytes() // empty username
+        ));
+
+        manager.addPassword(new Scanner(System.in));
+
+        verify(repository, never()).add(any());
+        verify(repository, never()).save();
     }
 
     @Test
