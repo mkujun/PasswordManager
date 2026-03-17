@@ -148,6 +148,7 @@ public class PasswordManager implements IPasswordManager {
 
         if (repository.find(account) != null) {
             System.out.println("Account with that name already exists!");
+            return;
         }
 
         String user = prompt(scanner, "Enter Username: ");

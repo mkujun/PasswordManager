@@ -10,6 +10,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.ByteArrayInputStream;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Scanner;
 
 import static org.junit.Assert.*;
@@ -143,5 +144,85 @@ public class PasswordManagerTest {
 
         verify(crypto).decrypt("encrypted", secretKey);
     }
-}
 
+    @Test
+    public void addPassword_existingAccount_shouldNotAddAndNotSave() {
+        when(repository.find("gmail")).thenReturn(new PasswordEntry("gmail", "existing", "enc"));
+
+        System.setIn(new ByteArrayInputStream(
+                "gmail\nuser\npass\n".getBytes()
+        ));
+
+        manager.secretKey = secretKey;
+        manager.addPassword(new Scanner(System.in));
+
+        // should not add when account exists
+        verify(repository, never()).add(any());
+        verify(repository, never()).save();
+    }
+
+    @Test
+    public void updateEntry_existingAccount_shouldEncryptAndUpdate() {
+        when(repository.find("gmail")).thenReturn(new PasswordEntry("gmail", "old", "oldenc"));
+        when(crypto.encrypt(eq("newpass"), any())).thenReturn("newenc");
+        when(repository.update(eq("gmail"), eq("newuser"), eq("newenc"))).thenReturn(true);
+
+        System.setIn(new ByteArrayInputStream("gmail\nnewuser\nnewpass\n".getBytes()));
+
+        manager.secretKey = secretKey;
+        manager.updateEntry(new Scanner(System.in));
+
+        verify(crypto).encrypt("newpass", secretKey);
+        verify(repository).update("gmail", "newuser", "newenc");
+    }
+
+    @Test
+    public void searchPassword_notFound_shouldPrintMessage() {
+        when(repository.find("unknown")).thenReturn(null);
+
+        System.setIn(new ByteArrayInputStream("unknown\n".getBytes()));
+
+        manager.searchPassword(new Scanner(System.in));
+
+        verify(repository).find("unknown");
+    }
+
+    @Test
+    public void updateMasterPassword_shouldReimportEntriesAndSave() {
+        Map<String, PasswordEntry> entries = new HashMap<>();
+        entries.put("a", new PasswordEntry("a", "u", "encA"));
+        entries.put("b", new PasswordEntry("b", "v", "encB"));
+
+        when(repository.getEntries()).thenReturn(entries);
+        when(crypto.generateSalt()).thenReturn(new byte[]{9});
+        when(crypto.deriveKey(anyString(), any())).thenReturn(secretKey);
+        when(crypto.encrypt(anyString(), any())).thenReturn("newMasterEnc");
+
+        // setMasterPassword input: master, master
+        System.setIn(new ByteArrayInputStream("newmaster\nnewmaster\n".getBytes()));
+
+        manager.secretKey = secretKey;
+
+        manager.updateMasterPassword();
+
+        // dump should be called to clear repository before re-import
+        verify(repository).dump();
+        // repository.add should be called for each former entry with new master password stored
+        verify(repository, atLeast(2)).add(any(PasswordEntry.class));
+        verify(repository, times(2)).save();
+    }
+
+    @Test
+    public void addPassword_emptyAccountOrPass_shouldNotAdd() {
+        when(repository.find("")).thenReturn(null);
+
+        System.setIn(new ByteArrayInputStream("\nuser\npass\n".getBytes())); // empty account
+        manager.addPassword(new Scanner(System.in));
+        verify(repository, never()).add(any());
+
+        System.setIn(new ByteArrayInputStream("acct\nuser\n\n".getBytes())); // empty pass
+        manager.addPassword(new Scanner(System.in));
+        verify(repository, never()).add(any());
+    }
+
+}
