@@ -33,9 +33,7 @@ public class PasswordManager implements IPasswordManager {
         if (repository.getEncryptedMasterPassword() == null) {
             System.out.println(INIT_MESSAGE);
             setMasterPassword();
-        } else if (!authenticate()) {
-            return false;
-        }
+        } else return authenticate();
 
         return true;
     }

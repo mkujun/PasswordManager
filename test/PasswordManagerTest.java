@@ -64,6 +64,40 @@ public class PasswordManagerTest {
     }
 
     @Test
+    public void start_shouldNotCallRun_whenInitializeReturnsFalse_usingSpy() {
+        // create a spy of the manager so we can stub initialize() without invoking real logic
+        PasswordManager spyManager = spy(new PasswordManager(crypto, repository));
+
+        // stub initialize to return false
+        doReturn(false).when(spyManager).initialize();
+
+        // call start
+        spyManager.start();
+
+        // run() should never be called
+        verify(spyManager, never()).run();
+    }
+
+    @Test
+    public void start_shouldCallRun_whenInitializeReturnsTrue_usingSubclass() {
+        // create a small subclass to capture run() invocation without side effects
+        class TestablePasswordManager extends PasswordManager {
+            boolean runCalled = false;
+            TestablePasswordManager(ICryptoService c, IPasswordRepository r) { super(c, r); }
+            @Override public void run() { runCalled = true; }
+        }
+
+        TestablePasswordManager testMgr = spy(new TestablePasswordManager(crypto, repository));
+        // stub initialize to return true
+        doReturn(true).when(testMgr).initialize();
+
+        testMgr.start();
+
+        // ensure our overridden run() was called
+        assertTrue(testMgr.runCalled);
+    }
+
+    @Test
     public void authenticate_wrongPasswordThreeTimes_shouldReturnFalse() {
         when(repository.getSalt()).thenReturn(new byte[]{1});
         when(repository.getEncryptedMasterPassword()).thenReturn("correct");
@@ -316,6 +350,66 @@ public class PasswordManagerTest {
 
         verify(crypto, never()).encrypt(anyString(), any());
         verify(repository, never()).update(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    public void authenticate_withNoSalt_shouldFollowCryptoBehavior() {
+        when(repository.getSalt()).thenReturn(null);
+        when(repository.getEncryptedMasterPassword()).thenReturn("encrypted");
+        when(crypto.deriveKey(anyString(), any())).thenReturn(secretKey);
+        // make crypto.encrypt produce the same encrypted value so authenticate returns true
+        when(crypto.encrypt(anyString(), any())).thenReturn("encrypted");
+
+        System.setIn(new ByteArrayInputStream("master123\n".getBytes()));
+
+        boolean result = manager.authenticate();
+
+        // authentication succeeds because crypto.encrypt produced "encrypted"
+        assertTrue(result);
+        verify(crypto).deriveKey(anyString(), isNull());
+        verify(crypto).encrypt(anyString(), any());
+    }
+
+    @Test
+    public void searchPassword_existingAccount_shouldReturnEntry() {
+        PasswordEntry entry = new PasswordEntry("acct", "u", "enc");
+        when(repository.find("acct")).thenReturn(entry);
+
+        System.setIn(new ByteArrayInputStream("acct\n".getBytes()));
+
+        manager.secretKey = secretKey;
+        manager.searchPassword(new Scanner(System.in));
+
+        verify(repository).find("acct");
+    }
+
+    @Test
+    public void removePassword_emptyInput_shouldCallRemoveAndSaveWithEmptyString() {
+        System.setIn(new ByteArrayInputStream("\n".getBytes()));
+
+        manager.removePassword(new Scanner(System.in));
+
+        // current implementation will call remove with empty string and then save
+        verify(repository).remove("");
+        verify(repository).save();
+    }
+
+    @Test
+    public void updateMasterPassword_noEntries_shouldSetMasterAndSaveTwice() {
+        when(repository.getEntries()).thenReturn(new HashMap<>());
+        when(crypto.generateSalt()).thenReturn(new byte[]{9});
+        when(crypto.deriveKey(anyString(), any())).thenReturn(secretKey);
+        when(crypto.encrypt(anyString(), any())).thenReturn("newMasterEnc");
+
+        System.setIn(new ByteArrayInputStream("newmaster\nnewmaster\n".getBytes()));
+
+        manager.secretKey = secretKey;
+
+        manager.updateMasterPassword();
+
+        // setMasterPassword calls repository.save() once; updateMasterPassword calls save() again at end
+        verify(repository, times(2)).save();
+        verify(repository).dump();
     }
 
 }
