@@ -146,6 +146,24 @@ public class PasswordManagerTest {
     }
 
     @Test
+    public void authenticate_succeeds_onSecondAttempt() {
+        // first attempt wrong, second attempt correct
+        when(repository.getSalt()).thenReturn(new byte[]{1});
+        when(repository.getEncryptedMasterPassword()).thenReturn("encrypted");
+        when(crypto.deriveKey(anyString(), any())).thenReturn(secretKey);
+        // first call to encrypt returns "wrong", second returns "encrypted"
+        when(crypto.encrypt(anyString(), any())).thenReturn("wrong", "encrypted");
+
+        System.setIn(new ByteArrayInputStream("firstTry\nmaster123\n".getBytes()));
+
+        boolean result = manager.authenticate();
+
+        assertTrue(result);
+        // deriveKey should have been called at least twice
+        verify(crypto, atLeast(2)).deriveKey(anyString(), any());
+    }
+
+    @Test
     public void addPassword_existingAccount_shouldNotAddAndNotSave() {
         when(repository.find("gmail")).thenReturn(new PasswordEntry("gmail", "existing", "enc"));
 
@@ -223,6 +241,81 @@ public class PasswordManagerTest {
         System.setIn(new ByteArrayInputStream("acct\nuser\n\n".getBytes())); // empty pass
         manager.addPassword(new Scanner(System.in));
         verify(repository, never()).add(any());
+    }
+
+    @Test
+    public void viewPasswords_emptyRepository_shouldNotCallDecrypt() {
+        when(repository.getEntries()).thenReturn(new HashMap<>());
+
+        manager.secretKey = secretKey;
+        manager.viewPasswords();
+
+        verify(crypto, never()).decrypt(anyString(), any());
+    }
+
+    @Test
+    public void initialize_noMasterPassword_callsSetMasterAndReturnsTrue() {
+        // repository has no master password -> setMasterPassword path
+        when(repository.getEncryptedMasterPassword()).thenReturn(null);
+        // mocks needed by setMasterPassword
+        when(crypto.generateSalt()).thenReturn(new byte[]{1});
+        when(crypto.deriveKey(anyString(), any())).thenReturn(secretKey);
+        when(crypto.encrypt(anyString(), any())).thenReturn("encryptedMaster");
+
+        // provide matching master password + confirmation
+        System.setIn(new ByteArrayInputStream("newmaster\nnewmaster\n".getBytes()));
+
+        boolean result = manager.initialize();
+
+        // initialize should succeed (set master password)
+        assertTrue(result);
+        verify(repository).setEncryptedMasterPassword("encryptedMaster");
+        verify(repository).save();
+    }
+
+    @Test
+    public void removePassword_nonExistingAccount_callsRemoveAndSave() {
+        when(repository.remove("nope")).thenReturn(false);
+
+        System.setIn(new ByteArrayInputStream("nope\n".getBytes()));
+
+        manager.removePassword(new Scanner(System.in));
+
+        verify(repository).remove("nope");
+        // implementation always calls save() after remove(...)
+        verify(repository).save();
+    }
+
+
+    @Test
+    public void addPassword_nullSecretKey_shouldCallEncryptAndAttemptAdd() {
+        when(repository.find("site")).thenReturn(null);
+        when(crypto.encrypt(eq("pass"), any())).thenReturn("encrypted");
+        when(repository.add(any(PasswordEntry.class))).thenReturn(true);
+
+        System.setIn(new ByteArrayInputStream("site\nuser\npass\n".getBytes()));
+
+        manager.secretKey = null; // not authenticated (current implementation does not guard)
+        manager.addPassword(new Scanner(System.in));
+
+        // current implementation will call encrypt even if secretKey is null
+        verify(crypto).encrypt(eq("pass"), isNull());
+        // repository.add is attempted and save is called
+        verify(repository).add(any(PasswordEntry.class));
+        verify(repository).save();
+    }
+
+    @Test
+    public void updateEntry_nonExistingAccount_shouldNotEncryptOrUpdate() {
+        when(repository.find("missing")).thenReturn(null);
+
+        System.setIn(new ByteArrayInputStream("missing\nnewuser\nnewpass\n".getBytes()));
+
+        manager.secretKey = secretKey;
+        manager.updateEntry(new Scanner(System.in));
+
+        verify(crypto, never()).encrypt(anyString(), any());
+        verify(repository, never()).update(anyString(), anyString(), anyString());
     }
 
 }
