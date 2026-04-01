@@ -63,7 +63,8 @@ public class PasswordRepositoryTest {
         boolean result = repository.add(entry);
 
         assertTrue(result);
-        assertEquals(entry, repository.find("gmail"));
+        // find returns a List; ensure the added entry is present
+        assertEquals(entry, repository.find("gmail").get(0));
     }
 
     @Test
@@ -88,7 +89,8 @@ public class PasswordRepositoryTest {
         boolean removed = repository.remove("gmail");
 
         assertTrue(removed);
-        assertNull(repository.find("gmail"));
+        // find returns a List; after removal it should be empty
+        assertTrue(repository.find("gmail").isEmpty());
     }
 
     @Test
@@ -99,6 +101,7 @@ public class PasswordRepositoryTest {
         assertFalse(repository.remove("unknown"));
     }
 
+    // todo: ispravi ovaj test
     @Test
     public void update_shouldReplaceExistingEntry() {
         when(persistence.load()).thenReturn(null);
@@ -110,7 +113,7 @@ public class PasswordRepositoryTest {
 
         assertTrue(updated);
 
-        PasswordEntry updatedEntry = repository.find("gmail");
+        PasswordEntry updatedEntry = repository.find("gmail").get(0);
         assertEquals("newUser", updatedEntry.getUsername());
         assertEquals("newEnc", updatedEntry.getEncryptedPassword());
     }

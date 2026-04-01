@@ -5,7 +5,9 @@ import interfaces.IPersistenceService;
 import model.PasswordEntry;
 import persistence.PersistenceService;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 public class PasswordRepository implements IPasswordRepository {
 
@@ -40,8 +42,15 @@ public class PasswordRepository implements IPasswordRepository {
         return entries.replace(accountName, new PasswordEntry(accountName, username, encryptedPassword)) != null;
     }
 
-    public PasswordEntry find(String accountName) {
-        return entries.get(accountName);
+    public List<PasswordEntry> find(String accountName) {
+        List<PasswordEntry> searchEntries = new ArrayList<>();
+
+        entries.forEach((key, value) -> {
+            if (value.getAccountName().contains(accountName)) {
+                searchEntries.add(entries.get(key));
+            }
+        });
+        return searchEntries;
     }
 
     public void save() {

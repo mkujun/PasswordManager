@@ -115,7 +115,8 @@ public class PasswordManagerTest {
 
     @Test
     public void addPassword_newAccount_shouldEncryptAndSave() {
-        when(repository.find("gmail")).thenReturn(null);
+        // repository.find returns a List; return empty list to indicate no existing account
+        when(repository.find("gmail")).thenReturn(new java.util.ArrayList<>());
         when(crypto.encrypt(eq("pass"), any())).thenReturn("encrypted");
 
         System.setIn(new ByteArrayInputStream(
@@ -199,7 +200,10 @@ public class PasswordManagerTest {
 
     @Test
     public void addPassword_existingAccount_shouldNotAddAndNotSave() {
-        when(repository.find("gmail")).thenReturn(new PasswordEntry("gmail", "existing", "enc"));
+        // repository.find returns a list; return a non-empty list to indicate existing account
+        java.util.List<model.PasswordEntry> existing = new java.util.ArrayList<>();
+        existing.add(new PasswordEntry("gmail", "existing", "enc"));
+        when(repository.find("gmail")).thenReturn(existing);
 
         System.setIn(new ByteArrayInputStream(
                 "gmail\nuser\npass\n".getBytes()
@@ -215,7 +219,9 @@ public class PasswordManagerTest {
 
     @Test
     public void updateEntry_existingAccount_shouldEncryptAndUpdate() {
-        when(repository.find("gmail")).thenReturn(new PasswordEntry("gmail", "old", "oldenc"));
+        java.util.List<model.PasswordEntry> existing = new java.util.ArrayList<>();
+        existing.add(new PasswordEntry("gmail", "existing", "enc"));
+        when(repository.find("gmail")).thenReturn(existing);
         when(crypto.encrypt(eq("newpass"), any())).thenReturn("newenc");
         when(repository.update(eq("gmail"), eq("newuser"), eq("newenc"))).thenReturn(true);
 
@@ -230,7 +236,8 @@ public class PasswordManagerTest {
 
     @Test
     public void searchPassword_notFound_shouldPrintMessage() {
-        when(repository.find("unknown")).thenReturn(null);
+        // repository.find returns a List; return empty list to indicate not found
+        when(repository.find("unknown")).thenReturn(new java.util.ArrayList<>());
 
         System.setIn(new ByteArrayInputStream("unknown\n".getBytes()));
 
@@ -373,7 +380,10 @@ public class PasswordManagerTest {
     @Test
     public void searchPassword_existingAccount_shouldReturnEntry() {
         PasswordEntry entry = new PasswordEntry("acct", "u", "enc");
-        when(repository.find("acct")).thenReturn(entry);
+        java.util.List<PasswordEntry> results = new java.util.ArrayList<>();
+        results.add(entry);
+        when(repository.find("acct")).thenReturn(results);
+        when(crypto.decrypt("enc", secretKey)).thenReturn("plain");
 
         System.setIn(new ByteArrayInputStream("acct\n".getBytes()));
 
@@ -381,6 +391,7 @@ public class PasswordManagerTest {
         manager.searchPassword(new Scanner(System.in));
 
         verify(repository).find("acct");
+        verify(crypto).decrypt("enc", secretKey);
     }
 
     @Test

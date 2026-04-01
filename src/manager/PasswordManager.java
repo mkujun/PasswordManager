@@ -7,6 +7,7 @@ import model.PasswordEntry;
 
 import javax.crypto.SecretKey;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 
@@ -144,7 +145,8 @@ public class PasswordManager implements IPasswordManager {
     public void addPassword(Scanner scanner) {
         String account = prompt(scanner, "Enter Account Name: ");
 
-        if (repository.find(account) != null) {
+        List<PasswordEntry> found = repository.find(account);
+        if (found != null && !found.isEmpty()) {
             System.out.println("Account with that name already exists!");
             return;
         }
@@ -180,10 +182,12 @@ public class PasswordManager implements IPasswordManager {
     public void searchPassword(Scanner scanner) {
         String account = prompt(scanner, "Enter Account Name: ");
 
-        PasswordEntry entry = repository.find(account);
+        List<PasswordEntry> entries = repository.find(account);
 
-        if (entry != null) {
-            printEntry(entry);
+        if (!entries.isEmpty()) {
+            entries.forEach(entry -> {
+                printEntry(entry);
+            });
         }
         else {
             System.out.println("Entry not found.");
