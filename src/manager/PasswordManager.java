@@ -205,6 +205,7 @@ public class PasswordManager implements IPasswordManager {
             String pass = prompt(scanner, "Enter New Password: ");
             String encrypted = crypto.encrypt(pass, secretKey);
             if(repository.update(account, user, encrypted)) {
+                repository.save();
                 System.out.println("Account updated!");
             }
         }
