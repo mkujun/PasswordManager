@@ -1,5 +1,4 @@
 import interfaces.IPersistenceService;
-import model.PasswordEntry;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -9,7 +8,7 @@ import repository.PasswordRepository;
 import java.util.HashMap;
 
 import static org.junit.Assert.*;
-        import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.*;
 
 public class PasswordRepositoryTest {
 
@@ -26,8 +25,8 @@ public class PasswordRepositoryTest {
         byte[] salt = new byte[]{1, 2, 3};
         String encryptedMaster = "encryptedMaster";
 
-        HashMap<String, PasswordEntry> entries = new HashMap<>();
-        entries.put("gmail", new PasswordEntry("gmail", "user", "encPass"));
+        HashMap<String, String> entries = new HashMap<>();
+        entries.put("gmail", "encPass");
 
         PersistenceService.LoadedData data =
                 new PersistenceService.LoadedData(salt, encryptedMaster, entries);
@@ -54,29 +53,23 @@ public class PasswordRepositoryTest {
     }
 
     @Test
-    public void add_shouldInsertNewEntry() {
+    public void addEncryptedEntry_shouldInsertNewEntry() {
         when(persistence.load()).thenReturn(null);
         repository = new PasswordRepository(persistence);
 
-        PasswordEntry entry = new PasswordEntry("gmail", "user", "enc");
-
-        boolean result = repository.add(entry);
+        boolean result = repository.addEncryptedEntry("enc", "gmail");
 
         assertTrue(result);
-        // find returns a List; ensure the added entry is present
-        assertEquals(entry, repository.find("gmail").get(0));
+        assertEquals("enc", repository.find("gmail").get("gmail"));
     }
 
     @Test
-    public void add_shouldFailForDuplicateAccount() {
+    public void addEncryptedEntry_shouldFailForDuplicateAccount() {
         when(persistence.load()).thenReturn(null);
         repository = new PasswordRepository(persistence);
 
-        PasswordEntry entry1 = new PasswordEntry("gmail", "user1", "enc1");
-        PasswordEntry entry2 = new PasswordEntry("gmail", "user2", "enc2");
-
-        assertTrue(repository.add(entry1));
-        assertFalse(repository.add(entry2));
+        assertTrue(repository.addEncryptedEntry("enc1", "gmail"));
+        assertFalse(repository.addEncryptedEntry("enc2", "gmail"));
     }
 
     @Test
@@ -84,12 +77,12 @@ public class PasswordRepositoryTest {
         when(persistence.load()).thenReturn(null);
         repository = new PasswordRepository(persistence);
 
-        repository.add(new PasswordEntry("gmail", "user", "enc"));
+        repository.addEncryptedEntry("enc", "gmail");
 
         boolean removed = repository.remove("gmail");
 
         assertTrue(removed);
-        // find returns a List; after removal it should be empty
+        // find returns a Map; after removal it should be empty
         assertTrue(repository.find("gmail").isEmpty());
     }
 
@@ -101,29 +94,26 @@ public class PasswordRepositoryTest {
         assertFalse(repository.remove("unknown"));
     }
 
-    // todo: ispravi ovaj test
     @Test
-    public void update_shouldReplaceExistingEntry() {
+    public void importEntries_shouldReplaceExistingEntry() {
         when(persistence.load()).thenReturn(null);
         repository = new PasswordRepository(persistence);
 
-        repository.add(new PasswordEntry("gmail", "oldUser", "oldEnc"));
+        repository.addEncryptedEntry("oldEnc", "gmail");
 
-        boolean updated = repository.update("gmail", "newUser", "newEnc");
+        HashMap<String, String> replacement = new HashMap<>();
+        replacement.put("gmail", "newEnc");
+        repository.importEntries(replacement);
 
-        assertTrue(updated);
-
-        PasswordEntry updatedEntry = repository.find("gmail").get(0);
-        assertEquals("newUser", updatedEntry.getUsername());
-        assertEquals("newEnc", updatedEntry.getEncryptedPassword());
+        assertEquals("newEnc", repository.find("gmail").get("gmail"));
     }
 
     @Test
-    public void update_shouldFail_whenEntryDoesNotExist() {
+    public void find_shouldReturnEmpty_whenEntryDoesNotExist() {
         when(persistence.load()).thenReturn(null);
         repository = new PasswordRepository(persistence);
 
-        assertFalse(repository.update("missing", "user", "enc"));
+        assertTrue(repository.find("missing").isEmpty());
     }
 
     @Test
@@ -137,7 +127,7 @@ public class PasswordRepositoryTest {
         repository.setSalt(salt);
         repository.setEncryptedMasterPassword(encryptedMaster);
 
-        repository.add(new PasswordEntry("gmail", "user", "enc"));
+        repository.addEncryptedEntry("enc", "gmail");
 
         repository.save();
 

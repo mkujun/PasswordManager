@@ -1,7 +1,6 @@
 package persistence;
 
 import interfaces.IPersistenceService;
-import model.PasswordEntry;
 
 import java.io.*;
 import java.util.HashMap;
@@ -14,11 +13,11 @@ public class PersistenceService implements IPersistenceService {
         this.fileName = fileName;
     }
 
-    public void save(byte[] salt, String encryptedMasterPassword, HashMap<String, PasswordEntry> entries) {
+    public void save(byte[] salt, String encryptedMasterPassword, HashMap<String, String> encryptedEntries) {
         try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(fileName))) {
             oos.writeObject(salt);
             oos.writeObject(encryptedMasterPassword);
-            oos.writeObject(entries);
+            oos.writeObject(encryptedEntries);
         } catch (IOException e) {
             System.err.println("Error saving data: " + e.getMessage());
         }
@@ -28,9 +27,9 @@ public class PersistenceService implements IPersistenceService {
         try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(fileName))) {
             byte[] salt = (byte[]) ois.readObject();
             String encryptedMasterPassword = (String) ois.readObject();
-            HashMap<String, PasswordEntry> entries = (HashMap<String, PasswordEntry>) ois.readObject();
+            HashMap<String, String> encryptedEntries = (HashMap<String, String>) ois.readObject();
 
-            return new LoadedData(salt, encryptedMasterPassword, entries);
+            return new LoadedData(salt, encryptedMasterPassword, encryptedEntries);
         } catch (IOException | ClassNotFoundException e) {
             System.out.println("No existing data found. Starting fresh.");
             return null;

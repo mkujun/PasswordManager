@@ -5,7 +5,6 @@ import org.junit.Test;
 import java.io.File;
 import java.util.HashMap;
 
-import model.PasswordEntry;
 import persistence.PersistenceService;
 import interfaces.IPersistenceService;
 
@@ -33,9 +32,9 @@ public class PersistenceServiceTest {
         byte[] salt = new byte[]{1, 2, 3};
         String encryptedMaster = "encrypted123";
 
-        HashMap<String, PasswordEntry> entries = new HashMap<>();
-        entries.put("gmail", new PasswordEntry("gmail", "user1", "enc-pass-1"));
-        entries.put("facebook", new PasswordEntry("facebook", "user2", "enc-pass-2"));
+        HashMap<String, String> entries = new HashMap<>();
+        entries.put("gmail", "enc-pass-1");
+        entries.put("facebook", "enc-pass-2");
 
         // Save
         persistenceService.save(salt, encryptedMaster, entries);
@@ -47,9 +46,9 @@ public class PersistenceServiceTest {
         assertArrayEquals(salt, data.salt);
         assertEquals(encryptedMaster, data.encryptedMasterPassword);
 
-        assertEquals(2, data.entries.size());
-        assertTrue(data.entries.containsKey("gmail"));
-        assertTrue(data.entries.containsKey("facebook"));
+        assertEquals(2, data.encryptedEntries.size());
+        assertTrue(data.encryptedEntries.containsKey("gmail"));
+        assertTrue(data.encryptedEntries.containsKey("facebook"));
     }
 
     @Test

@@ -2,12 +2,10 @@ package repository;
 
 import interfaces.IPasswordRepository;
 import interfaces.IPersistenceService;
-import model.PasswordEntry;
 import persistence.PersistenceService;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
+import java.util.Map;
 
 public class PasswordRepository implements IPasswordRepository {
 
@@ -15,7 +13,7 @@ public class PasswordRepository implements IPasswordRepository {
     private byte[] salt;
     private String encryptedMasterPassword;
 
-    private final HashMap<String, PasswordEntry> entries;
+    private HashMap<String, String> encryptedEntries;
 
     public PasswordRepository(IPersistenceService persistence) {
         this.persistence = persistence;
@@ -24,37 +22,34 @@ public class PasswordRepository implements IPasswordRepository {
         if (data != null) {
             this.salt = data.salt;
             this.encryptedMasterPassword = data.encryptedMasterPassword;
-            this.entries = data.entries;
+            this.encryptedEntries = data.encryptedEntries;
         } else {
-            this.entries = new HashMap<String, PasswordEntry>();
+            this.encryptedEntries = new HashMap<>();
         }
     }
 
-    public boolean add(PasswordEntry entry) {
-        return entries.putIfAbsent(entry.getAccountName(), entry) == null;
+    @Override
+    public boolean addEncryptedEntry(String encryptedPasswordEntry, String accountName) {
+        return encryptedEntries.putIfAbsent(accountName, encryptedPasswordEntry) == null;
     }
 
     public boolean remove(String accountName) {
-        return entries.remove(accountName) != null;
+        return encryptedEntries.remove(accountName) != null;
     }
 
-    public boolean update(String accountName, String username, String encryptedPassword) {
-        return entries.replace(accountName, new PasswordEntry(accountName, username, encryptedPassword)) != null;
-    }
+    public Map<String, String> find(String accountName) {
+        Map<String, String> searchEntries = new HashMap<>();
 
-    public List<PasswordEntry> find(String accountName) {
-        List<PasswordEntry> searchEntries = new ArrayList<>();
-
-        entries.forEach((key, value) -> {
-            if (value.getAccountName().contains(accountName)) {
-                searchEntries.add(entries.get(key));
-            }
+        encryptedEntries.forEach((key, value) -> {
+           if (key.contains(accountName)) {
+               searchEntries.put(key, value);
+           }
         });
         return searchEntries;
     }
 
     public void save() {
-        persistence.save(salt, encryptedMasterPassword, entries);
+        persistence.save(salt, encryptedMasterPassword, encryptedEntries);
     }
 
     public byte[] getSalt() {
@@ -65,14 +60,18 @@ public class PasswordRepository implements IPasswordRepository {
         this.salt = salt;
     }
 
-    public HashMap<String, PasswordEntry> getEntries() {
-        return entries;
+    public HashMap<String, String> getEntries() {
+        return encryptedEntries;
     }
 
     public void dump() {
-        this.entries.clear();
+        this.encryptedEntries.clear();
         this.encryptedMasterPassword = "";
         this.salt = null;
+    }
+
+    public void importEntries(Map<String, String> encryptedEntries) {
+        this.encryptedEntries = (HashMap<String, String>) encryptedEntries;
     }
 
     public String getEncryptedMasterPassword() {

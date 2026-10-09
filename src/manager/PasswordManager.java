@@ -6,10 +6,8 @@ import interfaces.IPasswordRepository;
 import model.PasswordEntry;
 
 import javax.crypto.SecretKey;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Scanner;
+import java.time.LocalDateTime;
+import java.util.*;
 
 public class PasswordManager implements IPasswordManager {
     private static final String INIT_MESSAGE = "No master password found. Setting up a new master password.";
@@ -126,40 +124,63 @@ public class PasswordManager implements IPasswordManager {
     }
 
     public void updateMasterPassword() {
-        Map<String, PasswordEntry> entriesCopy = new HashMap<>(repository.getEntries());
-
-        setMasterPassword();
-        repository.dump();
+        Map<String, PasswordEntry> decryptedEntries = new HashMap<>();
+        Map<String, String> entriesCopy = new HashMap<>(repository.getEntries());
 
         entriesCopy.forEach((key, value) -> {
-            importEntry(value, repository.getEncryptedMasterPassword());
+            PasswordEntry decryptedEntry = crypto.decryptEntry(value, secretKey);
+            decryptedEntries.put(key, decryptedEntry);
+        });
+
+        repository.dump();
+        setMasterPassword();
+
+        decryptedEntries.forEach((key, value) -> {
+
+            String encryptedNewEntry = crypto.encryptEntry(
+                    new PasswordEntry.Builder(value.getAccountName())
+                            .username(value.getUsername())
+                            .password(value.getPassword())
+                            .notes(value.getNotes())
+                            .url(value.getUrl())
+                            .build(),
+                    secretKey);
+            System.out.println(repository.addEncryptedEntry(encryptedNewEntry,  value.getAccountName()) ? "Password import successfully.": "Password not imported");
         });
 
         repository.save();
     }
 
-    public void importEntry(PasswordEntry entry, String newMasterPassword) {
-        repository.add(new PasswordEntry(entry.getAccountName(), entry.getUsername(), newMasterPassword));
-    }
-
     public void addPassword(Scanner scanner) {
         String account = prompt(scanner, "Enter Account Name: ");
 
-        List<PasswordEntry> found = repository.find(account);
-        if (found != null && !found.isEmpty()) {
+       Map<String, String> found = repository.find(account);
+
+        if (!found.isEmpty()) {
             System.out.println("Account with that name already exists!");
             return;
         }
 
         String user = prompt(scanner, "Enter Username: ");
         String pass = prompt(scanner, "Enter Password: ");
+        String notes = prompt(scanner, "Enter Notes: ");
+        String url = prompt(scanner, "Enter Url: ");
 
         if (!isInputValid(user, pass, account)) {
             System.out.println("All fields are required!");
         }
         else {
-            String encrypted = crypto.encrypt(pass, secretKey);
-            System.out.println(repository.add(new PasswordEntry(account, user, encrypted)) ? "Password added successfully.": "Password not added");
+            String encryptedNewEntry = crypto.encryptEntry(
+                    new PasswordEntry.Builder(account)
+                    .username(user)
+                    .password(pass)
+                    .notes(notes)
+                    .url(url)
+                    .build(),
+                     secretKey);
+
+            System.out.println(repository.addEncryptedEntry(encryptedNewEntry,  account) ? "Password added successfully.": "Password not added");
+
             repository.save();
         }
     }
@@ -175,39 +196,54 @@ public class PasswordManager implements IPasswordManager {
     }
 
     public void viewPasswords() {
-        Map<String, PasswordEntry> entries = repository.getEntries();
-        entries.values().forEach(this::printEntry);
+        Map<String, String> entries = repository.getEntries();
+        entries.forEach((key, value) -> printEntry(crypto.decryptEntry(value, secretKey)));
     }
 
     public void searchPassword(Scanner scanner) {
         String account = prompt(scanner, "Enter Account Name: ");
-
-        List<PasswordEntry> entries = repository.find(account);
-
-        if (!entries.isEmpty()) {
-            entries.forEach(entry -> {
-                printEntry(entry);
-            });
+        Map<String, String> entries = repository.find(account);
+        if (entries.isEmpty()) {
+            System.out.println("Entry not found.");
         }
         else {
-            System.out.println("Entry not found.");
+            entries.forEach((key, value) -> {
+                printEntry(crypto.decryptEntry(value, secretKey));
+            });
         }
     }
 
     public void updateEntry(Scanner scanner) {
         String account = prompt(scanner, "Enter Account Name: ");
+        Map<String, String> encryptedEntries = repository.getEntries();
+        Map<String, PasswordEntry> decryptedEntries = new HashMap<>();
 
-        if (repository.find(account) == null) {
+        if (repository.find(account).isEmpty()) {
             System.out.println("Account with that name does not exists!");
         }
+
         else {
+            encryptedEntries.forEach((key, value) -> {
+                decryptedEntries.put(key, crypto.decryptEntry(value, secretKey));
+            });
+
             String user = prompt(scanner, "Enter New Username: ");
             String pass = prompt(scanner, "Enter New Password: ");
-            String encrypted = crypto.encrypt(pass, secretKey);
-            if(repository.update(account, user, encrypted)) {
-                repository.save();
-                System.out.println("Account updated!");
-            }
+            String notes = prompt(scanner, "Enter New Notes: ");
+            String url = prompt(scanner, "Enter New Url: ");
+
+            PasswordEntry entryToUpdate = decryptedEntries.get(account);
+            entryToUpdate.setUsername(user);
+            entryToUpdate.setPassword(pass);
+            entryToUpdate.setNotes(notes);
+            entryToUpdate.setUrl(url);
+            entryToUpdate.setUpdatedAt(LocalDateTime.now());
+
+            encryptedEntries.replace(account, crypto.encryptEntry(entryToUpdate, secretKey));
+
+            repository.importEntries(encryptedEntries);
+            repository.save();
+            System.out.println("Account updated!");
         }
     }
 
@@ -217,9 +253,13 @@ public class PasswordManager implements IPasswordManager {
     }
 
     private void printEntry(PasswordEntry entry) {
-        String decrypted = crypto.decrypt(entry.getEncryptedPassword(), secretKey);
         System.out.println("\nAccount: " + entry.getAccountName());
         System.out.println("Username: " + entry.getUsername());
-        System.out.println("Password: " + decrypted);
+        System.out.println("Password: " + entry.getPassword());
+        System.out.println("Notes: " + entry.getNotes());
+        System.out.println("Url: " + entry.getUrl());
+        System.out.println("Updated at: " + entry.getUpdatedAt());
+        System.out.println("Created at: " + entry.getCreatedAt());
+        System.out.println("Account active: " + entry.isAccountActive());
     }
 }

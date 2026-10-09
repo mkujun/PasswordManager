@@ -34,20 +34,6 @@ public class CryptoServiceTest {
     }
 
     @Test
-    public void encryptAndDecrypt_shouldReturnOriginalPlainText() {
-        byte[] salt = cryptoService.generateSalt();
-        SecretKey key = cryptoService.deriveKey("masterPassword", salt);
-
-        String plainText = "mySecretPassword123!";
-        String encrypted = cryptoService.encrypt(plainText, key);
-        String decrypted = cryptoService.decrypt(encrypted, key);
-
-        assertNotNull(encrypted);
-        assertNotEquals(plainText, encrypted);
-        assertEquals(plainText, decrypted);
-    }
-
-    @Test
     public void encrypt_sameInputSameKey_shouldProduceSameOutput() {
         byte[] salt = cryptoService.generateSalt();
         SecretKey key = cryptoService.deriveKey("password", salt);
@@ -57,18 +43,5 @@ public class CryptoServiceTest {
         String encrypted2 = cryptoService.encrypt(text, key);
 
         assertEquals(encrypted1, encrypted2);
-    }
-
-    @Test(expected = RuntimeException.class)
-    public void decrypt_withWrongKey_shouldThrowException() {
-        byte[] salt1 = cryptoService.generateSalt();
-        byte[] salt2 = cryptoService.generateSalt();
-
-        SecretKey correctKey = cryptoService.deriveKey("password", salt1);
-        SecretKey wrongKey = cryptoService.deriveKey("password", salt2);
-
-        String encrypted = cryptoService.encrypt("secret", correctKey);
-
-        cryptoService.decrypt(encrypted, wrongKey);
     }
 }

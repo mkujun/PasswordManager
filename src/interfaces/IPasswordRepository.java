@@ -2,19 +2,18 @@ package interfaces;
 
 import model.PasswordEntry;
 
-import java.util.List;
 import java.util.Map;
 
 public interface IPasswordRepository {
-    boolean add(PasswordEntry passwordEntry);
+    boolean addEncryptedEntry(String encryptedPasswordEntry, String accountName);
     boolean remove(String accountName);
-    boolean update(String accountName, String username, String encryptedPassword);
-    List<PasswordEntry> find(String accountName);
+    Map<String, String> find(String accountName);
     void save();
     byte[] getSalt();
     void setSalt(byte[] salt);
     String getEncryptedMasterPassword();
     void setEncryptedMasterPassword(String encryptedMasterPassword);
-    Map<String, PasswordEntry> getEntries();
+    Map<String, String> getEntries();
     void dump();
+    void importEntries(Map<String, String> entries);
 }

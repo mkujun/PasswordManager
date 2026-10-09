@@ -24,6 +24,13 @@ public class PasswordManagerTest {
 
     private SecretKey secretKey;
 
+    private PasswordEntry entry(String account, String username, String password) {
+        return new PasswordEntry.Builder(account)
+                .username(username)
+                .password(password)
+                .build();
+    }
+
     @Before
     public void setUp() {
         crypto = mock(ICryptoService.class);
@@ -115,40 +122,43 @@ public class PasswordManagerTest {
 
     @Test
     public void addPassword_newAccount_shouldEncryptAndSave() {
-        // repository.find returns a List; return empty list to indicate no existing account
-        when(repository.find("gmail")).thenReturn(new java.util.ArrayList<>());
-        when(crypto.encrypt(eq("pass"), any())).thenReturn("encrypted");
+        // repository.find returns a Map; return empty map to indicate no existing account
+        when(repository.find("gmail")).thenReturn(new HashMap<>());
+        when(crypto.encryptEntry(any(PasswordEntry.class), any())).thenReturn("encrypted");
+        when(repository.addEncryptedEntry(eq("encrypted"), eq("gmail"))).thenReturn(true);
 
         System.setIn(new ByteArrayInputStream(
-                "gmail\nuser\npass\n".getBytes()
+                "gmail\nuser\npass\nnotes\nurl\n".getBytes()
         ));
 
         manager.secretKey = secretKey;
-        manager.addPassword(new java.util.Scanner(System.in));
+        manager.addPassword(new Scanner(System.in));
 
         ArgumentCaptor<PasswordEntry> captor =
                 ArgumentCaptor.forClass(PasswordEntry.class);
 
-        verify(repository).add(captor.capture());
+        verify(crypto).encryptEntry(captor.capture(), any());
+        verify(repository).addEncryptedEntry("encrypted", "gmail");
         verify(repository).save();
 
         PasswordEntry entry = captor.getValue();
         assertEquals("gmail", entry.getAccountName());
         assertEquals("user", entry.getUsername());
-        assertEquals("encrypted", entry.getEncryptedPassword());
+        assertEquals("pass", entry.getPassword());
     }
 
     @Test
     public void addPassword_shouldNotAdd_whenInputInvalid() {
-        when(repository.find("gmail")).thenReturn(null);
+        when(repository.find("gmail")).thenReturn(new HashMap<>());
 
         System.setIn(new ByteArrayInputStream(
-                "gmail\n\npass\n".getBytes() // empty username
+                "gmail\n\npass\nnotes\nurl\n".getBytes() // empty username
         ));
 
         manager.addPassword(new Scanner(System.in));
 
-        verify(repository, never()).add(any());
+        verify(crypto, never()).encryptEntry(any(PasswordEntry.class), any());
+        verify(repository, never()).addEncryptedEntry(anyString(), anyString());
         verify(repository, never()).save();
     }
 
@@ -158,7 +168,7 @@ public class PasswordManagerTest {
 
         System.setIn(new ByteArrayInputStream("gmail\n".getBytes()));
 
-        manager.removePassword(new java.util.Scanner(System.in));
+        manager.removePassword(new Scanner(System.in));
 
         verify(repository).remove("gmail");
         verify(repository).save();
@@ -166,18 +176,17 @@ public class PasswordManagerTest {
 
     @Test
     public void viewPasswords_shouldDecryptAndPrint() {
-        HashMap<String, PasswordEntry> map = new HashMap<>();
-        map.put("gmail",
-                new PasswordEntry("gmail", "user", "encrypted"));
+        HashMap<String, String> map = new HashMap<>();
+        map.put("gmail", "encrypted");
 
         when(repository.getEntries()).thenReturn(map);
-        when(crypto.decrypt("encrypted", secretKey)).thenReturn("plain");
+        when(crypto.decryptEntry("encrypted", secretKey)).thenReturn(entry("gmail", "user", "pass"));
 
         manager.secretKey = secretKey;
 
         manager.viewPasswords();
 
-        verify(crypto).decrypt("encrypted", secretKey);
+        verify(crypto).decryptEntry("encrypted", secretKey);
     }
 
     @Test
@@ -200,44 +209,51 @@ public class PasswordManagerTest {
 
     @Test
     public void addPassword_existingAccount_shouldNotAddAndNotSave() {
-        // repository.find returns a list; return a non-empty list to indicate existing account
-        java.util.List<model.PasswordEntry> existing = new java.util.ArrayList<>();
-        existing.add(new PasswordEntry("gmail", "existing", "enc"));
+        // repository.find returns a Map; return a non-empty map to indicate existing account
+        HashMap<String, String> existing = new HashMap<>();
+        existing.put("gmail", "enc");
         when(repository.find("gmail")).thenReturn(existing);
 
         System.setIn(new ByteArrayInputStream(
-                "gmail\nuser\npass\n".getBytes()
+                "gmail\nuser\npass\nnotes\nurl\n".getBytes()
         ));
 
         manager.secretKey = secretKey;
         manager.addPassword(new Scanner(System.in));
 
         // should not add when account exists
-        verify(repository, never()).add(any());
+        verify(crypto, never()).encryptEntry(any(PasswordEntry.class), any());
+        verify(repository, never()).addEncryptedEntry(anyString(), anyString());
         verify(repository, never()).save();
     }
 
     @Test
-    public void updateEntry_existingAccount_shouldEncryptAndUpdate() {
-        java.util.List<model.PasswordEntry> existing = new java.util.ArrayList<>();
-        existing.add(new PasswordEntry("gmail", "existing", "enc"));
-        when(repository.find("gmail")).thenReturn(existing);
-        when(crypto.encrypt(eq("newpass"), any())).thenReturn("newenc");
-        when(repository.update(eq("gmail"), eq("newuser"), eq("newenc"))).thenReturn(true);
+    public void updateEntry_existingAccount_shouldEncryptAndImport() {
+        HashMap<String, String> entries = new HashMap<>();
+        entries.put("gmail", "enc");
 
-        System.setIn(new ByteArrayInputStream("gmail\nnewuser\nnewpass\n".getBytes()));
+        HashMap<String, String> found = new HashMap<>();
+        found.put("gmail", "enc");
+
+        when(repository.find("gmail")).thenReturn(found);
+        when(repository.getEntries()).thenReturn(entries);
+        when(crypto.decryptEntry("enc", secretKey)).thenReturn(entry("gmail", "existing", "oldpass"));
+        when(crypto.encryptEntry(any(PasswordEntry.class), any())).thenReturn("newenc");
+
+        System.setIn(new ByteArrayInputStream("gmail\nnewuser\nnewpass\nnewnotes\nnewurl\n".getBytes()));
 
         manager.secretKey = secretKey;
         manager.updateEntry(new Scanner(System.in));
 
-        verify(crypto).encrypt("newpass", secretKey);
-        verify(repository).update("gmail", "newuser", "newenc");
+        verify(crypto).encryptEntry(any(PasswordEntry.class), eq(secretKey));
+        verify(repository).importEntries(any());
+        verify(repository).save();
     }
 
     @Test
     public void searchPassword_notFound_shouldPrintMessage() {
-        // repository.find returns a List; return empty list to indicate not found
-        when(repository.find("unknown")).thenReturn(new java.util.ArrayList<>());
+        // repository.find returns a Map; return empty map to indicate not found
+        when(repository.find("unknown")).thenReturn(new HashMap<>());
 
         System.setIn(new ByteArrayInputStream("unknown\n".getBytes()));
 
@@ -248,14 +264,18 @@ public class PasswordManagerTest {
 
     @Test
     public void updateMasterPassword_shouldReimportEntriesAndSave() {
-        Map<String, PasswordEntry> entries = new HashMap<>();
-        entries.put("a", new PasswordEntry("a", "u", "encA"));
-        entries.put("b", new PasswordEntry("b", "v", "encB"));
+        HashMap<String, String> entries = new HashMap<>();
+        entries.put("a", "encA");
+        entries.put("b", "encB");
 
         when(repository.getEntries()).thenReturn(entries);
+        when(crypto.decryptEntry("encA", secretKey)).thenReturn(entry("a", "u", "pA"));
+        when(crypto.decryptEntry("encB", secretKey)).thenReturn(entry("b", "v", "pB"));
         when(crypto.generateSalt()).thenReturn(new byte[]{9});
         when(crypto.deriveKey(anyString(), any())).thenReturn(secretKey);
         when(crypto.encrypt(anyString(), any())).thenReturn("newMasterEnc");
+        when(crypto.encryptEntry(any(PasswordEntry.class), any())).thenReturn("reEncrypted");
+        when(repository.addEncryptedEntry(anyString(), anyString())).thenReturn(true);
 
         // setMasterPassword input: master, master
         System.setIn(new ByteArrayInputStream("newmaster\nnewmaster\n".getBytes()));
@@ -266,22 +286,23 @@ public class PasswordManagerTest {
 
         // dump should be called to clear repository before re-import
         verify(repository).dump();
-        // repository.add should be called for each former entry with new master password stored
-        verify(repository, atLeast(2)).add(any(PasswordEntry.class));
+        // repository.addEncryptedEntry should be called for each former entry
+        verify(repository, atLeast(2)).addEncryptedEntry(anyString(), anyString());
         verify(repository, times(2)).save();
     }
 
     @Test
     public void addPassword_emptyAccountOrPass_shouldNotAdd() {
-        when(repository.find("")).thenReturn(null);
+        when(repository.find("")).thenReturn(new HashMap<>());
+        when(repository.find("acct")).thenReturn(new HashMap<>());
 
-        System.setIn(new ByteArrayInputStream("\nuser\npass\n".getBytes())); // empty account
+        System.setIn(new ByteArrayInputStream("\nuser\npass\nnotes\nurl\n".getBytes())); // empty account
         manager.addPassword(new Scanner(System.in));
-        verify(repository, never()).add(any());
+        verify(repository, never()).addEncryptedEntry(anyString(), anyString());
 
-        System.setIn(new ByteArrayInputStream("acct\nuser\n\n".getBytes())); // empty pass
+        System.setIn(new ByteArrayInputStream("acct\nuser\n\nnotes\nurl\n".getBytes())); // empty pass
         manager.addPassword(new Scanner(System.in));
-        verify(repository, never()).add(any());
+        verify(repository, never()).addEncryptedEntry(anyString(), anyString());
     }
 
     @Test
@@ -291,7 +312,7 @@ public class PasswordManagerTest {
         manager.secretKey = secretKey;
         manager.viewPasswords();
 
-        verify(crypto, never()).decrypt(anyString(), any());
+        verify(crypto, never()).decryptEntry(anyString(), any());
     }
 
     @Test
@@ -327,36 +348,35 @@ public class PasswordManagerTest {
         verify(repository).save();
     }
 
-
     @Test
     public void addPassword_nullSecretKey_shouldCallEncryptAndAttemptAdd() {
-        when(repository.find("site")).thenReturn(null);
-        when(crypto.encrypt(eq("pass"), any())).thenReturn("encrypted");
-        when(repository.add(any(PasswordEntry.class))).thenReturn(true);
+        when(repository.find("site")).thenReturn(new HashMap<>());
+        when(crypto.encryptEntry(any(PasswordEntry.class), any())).thenReturn("encrypted");
+        when(repository.addEncryptedEntry(eq("encrypted"), eq("site"))).thenReturn(true);
 
-        System.setIn(new ByteArrayInputStream("site\nuser\npass\n".getBytes()));
+        System.setIn(new ByteArrayInputStream("site\nuser\npass\nnotes\nurl\n".getBytes()));
 
         manager.secretKey = null; // not authenticated (current implementation does not guard)
         manager.addPassword(new Scanner(System.in));
 
-        // current implementation will call encrypt even if secretKey is null
-        verify(crypto).encrypt(eq("pass"), isNull());
-        // repository.add is attempted and save is called
-        verify(repository).add(any(PasswordEntry.class));
+        // current implementation will call encryptEntry even if secretKey is null
+        verify(crypto).encryptEntry(any(PasswordEntry.class), isNull());
+        // repository.addEncryptedEntry is attempted and save is called
+        verify(repository).addEncryptedEntry("encrypted", "site");
         verify(repository).save();
     }
 
     @Test
-    public void updateEntry_nonExistingAccount_shouldNotEncryptOrUpdate() {
-        when(repository.find("missing")).thenReturn(null);
+    public void updateEntry_nonExistingAccount_shouldNotEncryptOrImport() {
+        when(repository.find("missing")).thenReturn(new HashMap<>());
 
-        System.setIn(new ByteArrayInputStream("missing\nnewuser\nnewpass\n".getBytes()));
+        System.setIn(new ByteArrayInputStream("missing\nnewuser\nnewpass\nnewnotes\nnewurl\n".getBytes()));
 
         manager.secretKey = secretKey;
         manager.updateEntry(new Scanner(System.in));
 
-        verify(crypto, never()).encrypt(anyString(), any());
-        verify(repository, never()).update(anyString(), anyString(), anyString());
+        verify(crypto, never()).encryptEntry(any(PasswordEntry.class), any());
+        verify(repository, never()).importEntries(any());
     }
 
     @Test
@@ -379,11 +399,10 @@ public class PasswordManagerTest {
 
     @Test
     public void searchPassword_existingAccount_shouldReturnEntry() {
-        PasswordEntry entry = new PasswordEntry("acct", "u", "enc");
-        java.util.List<PasswordEntry> results = new java.util.ArrayList<>();
-        results.add(entry);
+        HashMap<String, String> results = new HashMap<>();
+        results.put("acct", "enc");
         when(repository.find("acct")).thenReturn(results);
-        when(crypto.decrypt("enc", secretKey)).thenReturn("plain");
+        when(crypto.decryptEntry("enc", secretKey)).thenReturn(entry("acct", "u", "p"));
 
         System.setIn(new ByteArrayInputStream("acct\n".getBytes()));
 
@@ -391,7 +410,7 @@ public class PasswordManagerTest {
         manager.searchPassword(new Scanner(System.in));
 
         verify(repository).find("acct");
-        verify(crypto).decrypt("enc", secretKey);
+        verify(crypto).decryptEntry("enc", secretKey);
     }
 
     @Test

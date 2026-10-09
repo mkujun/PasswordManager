@@ -15,6 +15,5 @@ public interface IPasswordManager {
     void viewPasswords();
     void searchPassword(Scanner scanner);
     void updateEntry(Scanner scanner);
-    void importEntry(PasswordEntry entry, String newMasterPassword);
     void updateMasterPassword();
 }
