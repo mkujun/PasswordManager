@@ -29,3 +29,7 @@ bin/
 .DS_Store
 
 passwords.dat
+
+.kiro/
+
+wslBuild/
