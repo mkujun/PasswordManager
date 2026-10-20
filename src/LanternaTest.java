@@ -1,5 +1,6 @@
 import com.googlecode.lanterna.TextColor;
 import com.googlecode.lanterna.gui2.*;
+import com.googlecode.lanterna.graphics.SimpleTheme;
 import com.googlecode.lanterna.input.KeyStroke;
 import com.googlecode.lanterna.input.KeyType;
 import com.googlecode.lanterna.screen.Screen;
@@ -77,42 +78,98 @@ public class LanternaTest {
                 Window.Hint.NO_DECORATIONS
         ));
 
+        // =====================================================
+        //  DARK THEME PALETA  (inspirirana Dracula / Tokyo Night)
+        //  RGB radi jer koristimo terminal emulator (setForceTextTerminal).
+        // =====================================================
+        final TextColor BG        = new TextColor.RGB(0x1E, 0x1E, 0x2E); // base pozadina
+        final TextColor CARD_BG   = new TextColor.RGB(0x28, 0x2A, 0x36); // kartica / paneli
+        final TextColor ACCENT    = new TextColor.RGB(0xBD, 0x93, 0xF9); // ljubičasti akcent
+        final TextColor ACCENT2   = new TextColor.RGB(0x8B, 0xE9, 0xFD); // cyan akcent
+        final TextColor FG        = new TextColor.RGB(0xF8, 0xF8, 0xF2); // glavni tekst
+        final TextColor MUTED     = new TextColor.RGB(0x62, 0x72, 0xA4); // prigušeni tekst
+        final TextColor ERROR     = new TextColor.RGB(0xFF, 0x55, 0x55); // greška
+        final TextColor SUCCESS   = new TextColor.RGB(0x50, 0xFA, 0x7B); // zelena (footer)
+
+        // Globalna dark tema za prozor — boja svu pozadinu i default tekst.
+        SimpleTheme theme = SimpleTheme.makeTheme(
+                true,       // activeIsBold
+                FG,         // base foreground
+                BG,         // base background
+                FG,         // editable foreground
+                CARD_BG,    // editable background
+                ACCENT,     // selected foreground
+                CARD_BG,    // selected background
+                BG          // gui background
+        );
+        window.setTheme(theme);
+
+        // Korijenski panel ispunjava cijeli ekran i centrira karticu.
         Panel root = new Panel(new BorderLayout());
 
-        // ---- Header ----
-        Panel header = new Panel(new LinearLayout(Direction.HORIZONTAL));
-        Label headerLabel = new Label("[ Password Manager - Login ]");
-        headerLabel.setForegroundColor(TextColor.ANSI.BLACK);
-        headerLabel.setBackgroundColor(TextColor.ANSI.CYAN);
-        headerLabel.setLayoutData(LinearLayout.createLayoutData(LinearLayout.Alignment.Fill));
-        header.addComponent(headerLabel);
-        header.setLayoutData(BorderLayout.Location.TOP);
+        // =====================================================
+        //  CENTRIRANA KARTICA (okvir dvostrukom linijom)
+        // =====================================================
+        Panel card = new Panel(new LinearLayout(Direction.VERTICAL));
 
-        // ---- Content ----
-        Panel content = new Panel(new LinearLayout(Direction.VERTICAL));
-        content.addComponent(new Label("Enter your master password:"));
-        content.addComponent(new EmptySpace());
+        // --- ASCII logo / brand ---
+        Label line1 = new Label("    .--------.    ");
+        Label line2 = new Label("    |  o__o  |    ");
+        Label line3 = new Label("    |__[==]__|    ");
+        for (Label l : new Label[]{line1, line2, line3}) {
+            l.setForegroundColor(ACCENT);
+            l.setLayoutData(LinearLayout.createLayoutData(LinearLayout.Alignment.Center));
+            card.addComponent(l);
+        }
 
-        // Mask lozinke zvjezdicama.
+        Label title = new Label("PASSWORD  MANAGER");
+        title.setForegroundColor(ACCENT);
+        title.addStyle(com.googlecode.lanterna.SGR.BOLD);
+        title.setLayoutData(LinearLayout.createLayoutData(LinearLayout.Alignment.Center));
+        card.addComponent(title);
+
+        Label subtitle = new Label("secure vault - master login");
+        subtitle.setForegroundColor(ACCENT2);
+        subtitle.setLayoutData(LinearLayout.createLayoutData(LinearLayout.Alignment.Center));
+        card.addComponent(subtitle);
+
+        card.addComponent(new EmptySpace(new com.googlecode.lanterna.TerminalSize(1, 1)));
+        card.addComponent(new Separator(Direction.HORIZONTAL)
+                .setLayoutData(LinearLayout.createLayoutData(LinearLayout.Alignment.Fill)));
+        card.addComponent(new EmptySpace(new com.googlecode.lanterna.TerminalSize(1, 1)));
+
+        // --- Prompt + unos lozinke ---
+        Label prompt = new Label("Enter your master password");
+        prompt.setForegroundColor(FG);
+        prompt.setLayoutData(LinearLayout.createLayoutData(LinearLayout.Alignment.Center));
+        card.addComponent(prompt);
+
+        card.addComponent(new EmptySpace(new com.googlecode.lanterna.TerminalSize(1, 1)));
+
+        // Mask lozinke zvjezdicama (unutar vlastitog okvira).
         final TextBox passwordBox = new TextBox().setMask('*');
-        passwordBox.setPreferredSize(new com.googlecode.lanterna.TerminalSize(30, 1));
-        content.addComponent(passwordBox);
+        passwordBox.setPreferredSize(new com.googlecode.lanterna.TerminalSize(32, 1));
+        Panel passwordWrap = new Panel(new LinearLayout(Direction.HORIZONTAL));
+        passwordWrap.addComponent(passwordBox.withBorder(Borders.singleLine()));
+        passwordWrap.setLayoutData(LinearLayout.createLayoutData(LinearLayout.Alignment.Center));
+        card.addComponent(passwordWrap);
 
-        content.addComponent(new EmptySpace());
+        card.addComponent(new EmptySpace(new com.googlecode.lanterna.TerminalSize(1, 1)));
 
         // Status/poruka o grešci.
-        final Label statusLabel = new Label("");
-        statusLabel.setForegroundColor(TextColor.ANSI.RED);
-        content.addComponent(statusLabel);
+        final Label statusLabel = new Label(" ");
+        statusLabel.setForegroundColor(ERROR);
+        statusLabel.setLayoutData(LinearLayout.createLayoutData(LinearLayout.Alignment.Center));
+        card.addComponent(statusLabel);
 
-        content.addComponent(new EmptySpace());
+        card.addComponent(new EmptySpace(new com.googlecode.lanterna.TerminalSize(1, 1)));
 
         // Login gumb.
         final boolean[] success = {false};
         final int[] attempts = {0};
         final int MAX_ATTEMPTS = 3;
 
-        Button loginButton = new Button("Login", () -> {
+        Button loginButton = new Button("  Unlock  ", () -> {
             String entered = passwordBox.getText();
 
             if (repository.getEncryptedMasterPassword() == null
@@ -136,21 +193,42 @@ public class LanternaTest {
                 }
             }
         });
-        content.addComponent(loginButton);
+        loginButton.setLayoutData(LinearLayout.createLayoutData(LinearLayout.Alignment.Center));
+        card.addComponent(loginButton);
 
-        content.setLayoutData(BorderLayout.Location.CENTER);
+        // Kartica s okvirom + centriranje unutar ekrana.
+        Panel cardWrap = new Panel(new GridLayout(1));
+        Border borderedCard = card.withBorder(Borders.doubleLine());
+        borderedCard.setLayoutData(GridLayout.createLayoutData(
+                GridLayout.Alignment.CENTER, GridLayout.Alignment.CENTER, true, true));
+        cardWrap.addComponent(borderedCard);
+        cardWrap.setLayoutData(BorderLayout.Location.CENTER);
 
-        // ---- Footer ----
+        // =====================================================
+        //  Header (traka na vrhu)
+        // =====================================================
+        Panel header = new Panel(new LinearLayout(Direction.HORIZONTAL));
+        Label headerLabel = new Label("  Password Manager ");
+        headerLabel.setForegroundColor(ACCENT);
+        headerLabel.setBackgroundColor(CARD_BG);
+        headerLabel.addStyle(com.googlecode.lanterna.SGR.BOLD);
+        headerLabel.setLayoutData(LinearLayout.createLayoutData(LinearLayout.Alignment.Fill));
+        header.addComponent(headerLabel);
+        header.setLayoutData(BorderLayout.Location.TOP);
+
+        // =====================================================
+        //  Footer (traka na dnu)
+        // =====================================================
         Panel footer = new Panel(new LinearLayout(Direction.HORIZONTAL));
-        Label footerLabel = new Label("Enter password and press Login | Q or ESC to exit");
-        footerLabel.setForegroundColor(TextColor.ANSI.BLACK);
-        footerLabel.setBackgroundColor(TextColor.ANSI.WHITE);
+        Label footerLabel = new Label(" TAB move | ENTER unlock | Q / ESC exit ");
+        footerLabel.setForegroundColor(SUCCESS);
+        footerLabel.setBackgroundColor(CARD_BG);
         footerLabel.setLayoutData(LinearLayout.createLayoutData(LinearLayout.Alignment.Fill));
         footer.addComponent(footerLabel);
         footer.setLayoutData(BorderLayout.Location.BOTTOM);
 
         root.addComponent(header);
-        root.addComponent(content);
+        root.addComponent(cardWrap);
         root.addComponent(footer);
 
         window.setComponent(root);
