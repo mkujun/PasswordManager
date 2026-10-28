@@ -10,10 +10,14 @@ import com.googlecode.lanterna.terminal.Terminal;
 import crypto.CryptoService;
 import interfaces.ICryptoService;
 import interfaces.IPasswordRepository;
+import model.PasswordEntry;
 import persistence.PersistenceService;
 import repository.PasswordRepository;
 
 import javax.crypto.SecretKey;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Lanterna UI prototype.
@@ -111,7 +115,13 @@ public class Lanterna {
 
     /** Shows the password list screen. */
     private void showPasswordListScreen() {
-        PasswordList passwordList = new PasswordList(theme);
+        Map<String, String> entries = repository.getEntries();
+        List<PasswordEntry> passwordEntries = new ArrayList<>();
+        entries.forEach((key, value) -> {
+            passwordEntries.add(crypto.decryptEntry(value, secretKey));
+        });
+
+        PasswordList passwordList = new PasswordList(theme, passwordEntries);
         gui.addWindowAndWait(passwordList.getWindow());
     }
 }
