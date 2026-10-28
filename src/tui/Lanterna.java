@@ -2,6 +2,8 @@ package tui;
 
 import com.googlecode.lanterna.graphics.SimpleTheme;
 import com.googlecode.lanterna.gui2.MultiWindowTextGUI;
+import com.googlecode.lanterna.gui2.dialogs.MessageDialog;
+import com.googlecode.lanterna.gui2.dialogs.MessageDialogButton;
 import com.googlecode.lanterna.screen.Screen;
 import com.googlecode.lanterna.screen.TerminalScreen;
 import com.googlecode.lanterna.terminal.DefaultTerminalFactory;
@@ -27,7 +29,8 @@ import java.util.Map;
  *   2. Validation uses the same logic as PasswordManager.authenticate():
  *        deriveKey(password, salt) -> encrypt(password, key) -> compare
  *        against the stored encryptedMasterPassword.
- *   3. On success -> the Password List screen.
+ *   3. On success -> the main menu, from which the user opens the password
+ *      list, adds a password, opens settings or exits.
  */
 public class Lanterna {
     private static final String FILE_NAME = "passwords.dat";
@@ -41,6 +44,7 @@ public class Lanterna {
     private SecretKey secretKey;
 
     private Login loginWindow;
+    private MainMenu mainMenu;
 
     private int loginAttempts = 3;
 
@@ -85,7 +89,7 @@ public class Lanterna {
         String enteredPassword = loginWindow.getEnteredPassword();
 
         if (validateUser(enteredPassword)) {
-            showPasswordListScreen();
+            showMainMenu();
         } else {
             loginAttempts--;
             if (loginAttempts == 0) {
@@ -113,6 +117,26 @@ public class Lanterna {
         return false;
     }
 
+    /**
+     * Shows the main menu (sketch screen 1). Each menu action opens its own
+     * sub-screen with addWindowAndWait, so closing a sub-screen returns here.
+     * The menu itself blocks until the user chooses Exit (or Q/ESC).
+     */
+    private void showMainMenu() {
+        mainMenu = new MainMenu(
+                theme,
+                this::showPasswordListScreen,
+                this::showAddPasswordScreen,
+                this::showSettingsScreen);
+        gui.addWindowAndWait(mainMenu.getWindow());
+
+        // Returning from the menu (Exit or Q/ESC) means the user is done, so
+        // close the login window too and let the app terminate.
+        if (loginWindow != null) {
+            loginWindow.close();
+        }
+    }
+
     /** Shows the password list screen. */
     private void showPasswordListScreen() {
         Map<String, String> entries = repository.getEntries();
@@ -123,5 +147,30 @@ public class Lanterna {
 
         PasswordList passwordList = new PasswordList(theme, passwordEntries);
         gui.addWindowAndWait(passwordList.getWindow());
+    }
+
+    /**
+     * Placeholder for the "add new password" screen (sketch screen 4), which
+     * is not implemented yet. Shows an informational dialog and returns to the
+     * menu so the navigation flow is already wired up.
+     */
+    private void showAddPasswordScreen() {
+        MessageDialog.showMessageDialog(
+                gui,
+                "Add new password",
+                "The add password screen is not implemented yet.",
+                MessageDialogButton.OK);
+    }
+
+    /**
+     * Placeholder for the "settings" screen (sketch screen 5), not implemented
+     * yet. Shows an informational dialog and returns to the menu.
+     */
+    private void showSettingsScreen() {
+        MessageDialog.showMessageDialog(
+                gui,
+                "Settings",
+                "The settings screen is not implemented yet.",
+                MessageDialogButton.OK);
     }
 }
