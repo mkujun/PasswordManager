@@ -146,20 +146,70 @@ public class Lanterna {
         });
 
         PasswordList passwordList = new PasswordList(theme, passwordEntries);
+        passwordList.setOnDelete(entry -> {
+            boolean removed = repository.remove(entry.getAccountName());
+            if (removed) {
+                repository.save();
+            }
+            return removed;
+        });
         gui.addWindowAndWait(passwordList.getWindow());
     }
 
     /**
-     * Placeholder for the "add new password" screen (sketch screen 4), which
-     * is not implemented yet. Shows an informational dialog and returns to the
-     * menu so the navigation flow is already wired up.
+     * Shows the "add new password" screen (sketch screen 4). On Save the input
+     * is validated, encrypted and persisted; on success the screen closes and
+     * control returns to the menu. Cancel / ESC just closes the screen.
      */
     private void showAddPasswordScreen() {
-        MessageDialog.showMessageDialog(
-                gui,
-                "Add new password",
-                "The add password screen is not implemented yet.",
-                MessageDialogButton.OK);
+        AddPassword addScreen = new AddPassword(theme, null, null);
+
+        Runnable onSave = () -> {
+            String account = addScreen.getAccount();
+            String username = addScreen.getUsername();
+            String password = addScreen.getPassword();
+            String url = addScreen.getUrl();
+            String notes = addScreen.getNotes();
+
+            // Required fields (same rule as PasswordManager.addPassword).
+            if (account.isEmpty() || username.isEmpty() || password.isEmpty()) {
+                addScreen.showError("Website, username and password are required.");
+                return;
+            }
+
+            // Password and its repeat must match.
+            if (!addScreen.passwordsMatch()) {
+                addScreen.showError("Passwords do not match.");
+                return;
+            }
+
+            // Reject duplicate account names.
+            if (!repository.find(account).isEmpty()) {
+                addScreen.showError("An account with that name already exists.");
+                return;
+            }
+
+            String encrypted = crypto.encryptEntry(
+                    new PasswordEntry.Builder(account)
+                            .username(username)
+                            .password(password)
+                            .notes(notes)
+                            .url(url)
+                            .build(),
+                    secretKey);
+
+            if (repository.addEncryptedEntry(encrypted, account)) {
+                repository.save();
+                addScreen.close();
+            } else {
+                addScreen.showError("Could not save the password. Try again.");
+            }
+        };
+
+        addScreen.setOnSave(onSave);
+        addScreen.setOnCancel(addScreen::close);
+
+        gui.addWindowAndWait(addScreen.getWindow());
     }
 
     /**

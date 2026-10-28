@@ -16,6 +16,8 @@ import com.googlecode.lanterna.gui2.Separator;
 import com.googlecode.lanterna.gui2.TextBox;
 import com.googlecode.lanterna.gui2.Window;
 import com.googlecode.lanterna.gui2.WindowListenerAdapter;
+import com.googlecode.lanterna.gui2.dialogs.MessageDialog;
+import com.googlecode.lanterna.gui2.dialogs.MessageDialogButton;
 import com.googlecode.lanterna.input.KeyStroke;
 import com.googlecode.lanterna.input.KeyType;
 import model.PasswordEntry;
@@ -48,6 +50,17 @@ public class PasswordList extends AppScreen {
 
     private final List<PasswordEntry> entries;
 
+    /**
+     * Callback invoked when the user confirms deletion of an entry. It should
+     * perform the actual removal (repository + persistence) and return true on
+     * success so the screen can update its view.
+     */
+    public interface DeleteHandler {
+        boolean delete(PasswordEntry entry);
+    }
+
+    private DeleteHandler onDelete;
+
     // List + filter widgets.
     private ActionListBox listBox;
     private TextBox searchBox;
@@ -72,10 +85,18 @@ public class PasswordList extends AppScreen {
 
     public PasswordList(SimpleTheme theme, List<PasswordEntry> passwordEntries) {
         super(theme);
-        this.entries = passwordEntries;
+        // Defensive mutable copy so we can remove entries after deletion.
+        this.entries = new java.util.ArrayList<>(
+                passwordEntries == null ? java.util.Collections.emptyList() : passwordEntries);
         initGuiElements();
         addExitOnQorEsc(window);
         addToggleOnSpace();
+        addDeleteOnD();
+    }
+
+    /** Assigns the delete callback (may be set after construction). */
+    public void setOnDelete(DeleteHandler onDelete) {
+        this.onDelete = onDelete;
     }
 
     private void initGuiElements() {
@@ -284,7 +305,7 @@ public class PasswordList extends AppScreen {
     // =====================================================
     private Panel buildFooter() {
         Panel footer = new Panel(new LinearLayout(Direction.HORIZONTAL));
-        Label footerLabel = new Label(" TAB focus | type to search | UP/DOWN select | SPACE show/hide | Q / ESC exit ");
+        Label footerLabel = new Label(" type to search | UP/DOWN select | SPACE show/hide | D delete | Q / ESC exit ");
         footerLabel.setForegroundColor(SUCCESS);
         footerLabel.setBackgroundColor(CARD_BG);
         footerLabel.setLayoutData(LinearLayout.createLayoutData(LinearLayout.Alignment.Fill));
@@ -396,5 +417,66 @@ public class PasswordList extends AppScreen {
         return keyStroke.getKeyType() == KeyType.Character
                 && keyStroke.getCharacter() != null
                 && keyStroke.getCharacter() == ' ';
+    }
+
+    // =====================================================
+    //  Delete handler (D key)
+    // =====================================================
+    /**
+     * Registers a listener that deletes the selected entry when the user
+     * presses D (upper or lower case). The search box keeps the key when it is
+     * focused so 'd' remains typeable while searching.
+     */
+    private void addDeleteOnD() {
+        window.addWindowListener(new WindowListenerAdapter() {
+            @Override
+            public void onInput(Window basePane, KeyStroke keyStroke,
+                                AtomicBoolean deliverEvent) {
+                if (!isDeleteKey(keyStroke)) {
+                    return;
+                }
+                // While searching, let the field receive the 'd' character.
+                if (window.getFocusedInteractable() == searchBox) {
+                    return;
+                }
+                deliverEvent.set(false);
+                deleteSelected();
+            }
+        });
+    }
+
+    private static boolean isDeleteKey(KeyStroke keyStroke) {
+        return keyStroke.getKeyType() == KeyType.Character
+                && keyStroke.getCharacter() != null
+                && Character.toUpperCase(keyStroke.getCharacter()) == 'D';
+    }
+
+    /**
+     * Asks for confirmation and, if accepted, deletes the currently selected
+     * entry via the delete callback, then refreshes the list.
+     */
+    private void deleteSelected() {
+        if (selectedEntry == null || onDelete == null) {
+            return;
+        }
+
+        PasswordEntry target = selectedEntry;
+        MessageDialogButton choice = MessageDialog.showMessageDialog(
+                window.getTextGUI(),
+                "Delete password",
+                "Delete the entry for \"" + safe(target.getAccountName()) + "\"?",
+                MessageDialogButton.Yes, MessageDialogButton.No);
+
+        if (choice != MessageDialogButton.Yes) {
+            return;
+        }
+
+        if (onDelete.delete(target)) {
+            entries.remove(target);
+            selectedEntry = null;
+            // Rebuild the list honoring the current filter.
+            populateList(searchBox == null ? "" : searchBox.getText());
+            listTitle.setText(" deleted \"" + safe(target.getAccountName()) + "\"");
+        }
     }
 }
