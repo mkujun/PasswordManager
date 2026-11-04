@@ -61,6 +61,16 @@ public class PasswordList extends AppScreen {
 
     private DeleteHandler onDelete;
 
+    /**
+     * Callback invoked when the user presses E on an entry. It should show the
+     * edit form, persist the change and update the given entry in place.
+     * Returns true if the entry was changed so the screen can refresh.
+     */
+    public interface EditHandler {
+        boolean edit(PasswordEntry entry);
+    }
+
+    private EditHandler onEdit;
     // List + filter widgets.
     private ActionListBox listBox;
     private TextBox searchBox;
@@ -92,6 +102,12 @@ public class PasswordList extends AppScreen {
         addExitOnQorEsc(window);
         addToggleOnSpace();
         addDeleteOnD();
+        addEditOnE();
+    }
+
+    /** Assigns the edit callback (may be set after construction). */
+    public void setOnEdit(EditHandler onEdit) {
+        this.onEdit = onEdit;
     }
 
     /** Assigns the delete callback (may be set after construction). */
@@ -305,7 +321,7 @@ public class PasswordList extends AppScreen {
     // =====================================================
     private Panel buildFooter() {
         Panel footer = new Panel(new LinearLayout(Direction.HORIZONTAL));
-        Label footerLabel = new Label(" type to search | UP/DOWN select | SPACE show/hide | D delete | Q / ESC exit ");
+        Label footerLabel = new Label(" type to search | UP/DOWN select | SPACE show/hide | E edit | D delete | Q / ESC exit ");
         footerLabel.setForegroundColor(SUCCESS);
         footerLabel.setBackgroundColor(CARD_BG);
         footerLabel.setLayoutData(LinearLayout.createLayoutData(LinearLayout.Alignment.Fill));
@@ -417,6 +433,55 @@ public class PasswordList extends AppScreen {
         return keyStroke.getKeyType() == KeyType.Character
                 && keyStroke.getCharacter() != null
                 && keyStroke.getCharacter() == ' ';
+    }
+
+    // =====================================================
+    //  Edit handler (E key)
+    // =====================================================
+    /**
+     * Registers a listener that edits the selected entry when the user
+     * presses E (upper or lower case). The search box keeps the key when it is
+     * focused so 'e' remains typeable while searching.
+     */
+    private void addEditOnE() {
+        window.addWindowListener(new WindowListenerAdapter() {
+            @Override
+            public void onInput(Window basePane, KeyStroke keyStroke,
+                                AtomicBoolean deliverEvent) {
+                if (!isEditKey(keyStroke)) {
+                    return;
+                }
+                if (window.getFocusedInteractable() == searchBox) {
+                    return;
+                }
+                deliverEvent.set(false);
+                editSelected();
+            }
+        });
+    }
+
+    private static boolean isEditKey(KeyStroke keyStroke) {
+        return keyStroke.getKeyType() == KeyType.Character
+                && keyStroke.getCharacter() != null
+                && Character.toUpperCase(keyStroke.getCharacter()) == 'E';
+    }
+
+    /**
+     * Delegates editing of the selected entry to the edit callback and, if it
+     * reports a change, refreshes the list and details.
+     */
+    private void editSelected() {
+        if (selectedEntry == null || onEdit == null) {
+            return;
+        }
+
+        PasswordEntry target = selectedEntry;
+        if (onEdit.edit(target)) {
+            passwordRevealed = false;
+            populateList(searchBox == null ? "" : searchBox.getText());
+            renderSelectedEntry();
+            listTitle.setText(" updated \"" + safe(target.getAccountName()) + "\"");
+        }
     }
 
     // =====================================================

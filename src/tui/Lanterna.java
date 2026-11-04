@@ -17,6 +17,7 @@ import persistence.PersistenceService;
 import repository.PasswordRepository;
 
 import javax.crypto.SecretKey;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -137,6 +138,7 @@ public class Lanterna {
         }
     }
 
+    // todo: extract this onDelete into separate function
     /** Shows the password list screen. */
     private void showPasswordListScreen() {
         Map<String, String> entries = repository.getEntries();
@@ -153,7 +155,78 @@ public class Lanterna {
             }
             return removed;
         });
+        passwordList.setOnEdit(this::editEntry);
         gui.addWindowAndWait(passwordList.getWindow());
+    }
+
+    /**
+     * Shows the edit form pre-filled with the entry's values. On Save the input
+     * is validated, encrypted and persisted, and the given entry is updated in
+     * place. Returns true if the entry was changed.
+     */
+    private boolean editEntry(PasswordEntry entry) {
+        AddPassword editScreen = new AddPassword(theme, null, null);
+        editScreen.prefill(entry);
+        boolean[] changed = {false};
+
+        editScreen.setOnSave(() -> {
+            String username = editScreen.getUsername();
+            String password = editScreen.getPassword();
+            String url = editScreen.getUrl();
+            String notes = editScreen.getNotes();
+
+            if (username.isEmpty() || password.isEmpty()) {
+                editScreen.showError("Username and password are required.");
+                return;
+            }
+            if (!editScreen.passwordsMatch()) {
+                editScreen.showError("Passwords do not match.");
+                return;
+            }
+
+            // Nothing changed -> keep the entry (and its updatedAt) untouched.
+            if (username.equals(nullToEmpty(entry.getUsername()))
+                    && password.equals(nullToEmpty(entry.getPassword()))
+                    && url.equals(nullToEmpty(entry.getUrl()))
+                    && notes.equals(nullToEmpty(entry.getNotes()))) {
+                editScreen.close();
+                return;
+            }
+
+            LocalDateTime now = LocalDateTime.now();
+            PasswordEntry updated = new PasswordEntry.Builder(entry.getAccountName())
+                    .username(username)
+                    .password(password)
+                    .url(url)
+                    .notes(notes)
+                    .createdAt(entry.getCreatedAt())
+                    .updatedAt(now)
+                    .accountActive(entry.isAccountActive())
+                    .build();
+
+            Map<String, String> encryptedEntries = repository.getEntries();
+            encryptedEntries.replace(entry.getAccountName(),
+                    crypto.encryptEntry(updated, secretKey));
+            repository.importEntries(encryptedEntries);
+            repository.save();
+
+            // Persisted -> reflect the change in the in-memory entry.
+            entry.setUsername(username);
+            entry.setPassword(password);
+            entry.setUrl(url);
+            entry.setNotes(notes);
+            entry.setUpdatedAt(now);
+            changed[0] = true;
+            editScreen.close();
+        });
+        editScreen.setOnCancel(editScreen::close);
+
+        gui.addWindowAndWait(editScreen.getWindow());
+        return changed[0];
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
     }
 
     /**

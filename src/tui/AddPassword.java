@@ -19,6 +19,8 @@ import com.googlecode.lanterna.gui2.WindowListenerAdapter;
 import com.googlecode.lanterna.input.KeyStroke;
 import com.googlecode.lanterna.input.KeyType;
 
+import model.PasswordEntry;
+
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static tui.Theme.ACCENT;
@@ -49,6 +51,7 @@ public class AddPassword extends AppScreen {
     private TextBox urlBox;
     private TextBox notesBox;
     private Label statusLabel;
+    private Label titleLabel;
     private Button showHideButton;
 
     // Whether the password fields currently show plain text instead of '*'.
@@ -123,6 +126,26 @@ public class AddPassword extends AppScreen {
         return notesBox.getText().trim();
     }
 
+    /**
+     * Switches the form to "edit" mode: fills every field with the values of
+     * the given entry and makes the account name read-only (it is the key of
+     * the entry in the repository).
+     */
+    public void prefill(PasswordEntry entry) {
+        titleLabel.setText("Edit password");
+        accountBox.setText(nullToEmpty(entry.getAccountName()));
+        accountBox.setReadOnly(true);
+        usernameBox.setText(nullToEmpty(entry.getUsername()));
+        passwordBox.setText(nullToEmpty(entry.getPassword()));
+        repeatPasswordBox.setText(nullToEmpty(entry.getPassword()));
+        urlBox.setText(nullToEmpty(entry.getUrl()));
+        notesBox.setText(nullToEmpty(entry.getNotes()));
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
+    }
+
     /** Shows a validation/error message to the user. */
     public void showError(String message) {
         statusLabel.setForegroundColor(ERROR);
@@ -158,10 +181,10 @@ public class AddPassword extends AppScreen {
     private Panel buildBody() {
         Panel form = new Panel(new LinearLayout(Direction.VERTICAL));
 
-        Label title = new Label("Add new password");
-        title.setForegroundColor(ACCENT);
-        title.addStyle(SGR.BOLD);
-        form.addComponent(title);
+        titleLabel = new Label("Add new password");
+        titleLabel.setForegroundColor(ACCENT);
+        titleLabel.addStyle(SGR.BOLD);
+        form.addComponent(titleLabel);
         form.addComponent(new Separator(Direction.HORIZONTAL)
                 .setLayoutData(LinearLayout.createLayoutData(LinearLayout.Alignment.Fill)));
         form.addComponent(new EmptySpace(new TerminalSize(1, 1)));
