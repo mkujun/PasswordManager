@@ -47,6 +47,8 @@ public class Lanterna {
     private Login loginWindow;
     private MainMenu mainMenu;
 
+    // todo: remove this, user can guess any number of times
+    // it is not that the app can lock itself from further usage
     private int loginAttempts = 3;
 
     public MultiWindowTextGUI gui;
@@ -55,7 +57,7 @@ public class Lanterna {
         new Lanterna().run();
     }
 
-    private void run() throws Exception {
+    public void run() throws Exception {
         DefaultTerminalFactory factory = new DefaultTerminalFactory()
                 .setForceTextTerminal(true)
                 .setTerminalEmulatorTitle("Password Manager")
