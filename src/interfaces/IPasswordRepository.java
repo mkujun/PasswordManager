@@ -16,4 +16,7 @@ public interface IPasswordRepository {
     Map<String, String> getEntries();
     void dump();
     void importEntries(Map<String, String> entries);
+    boolean accountExists(String accountName);
+    String getEntry(String accountName);
+    void updateEntry(String accountName, String newEntry);
 }

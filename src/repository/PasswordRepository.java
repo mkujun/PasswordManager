@@ -48,6 +48,21 @@ public class PasswordRepository implements IPasswordRepository {
         return searchEntries;
     }
 
+    @Override
+    public boolean accountExists(String accountName) {
+        return encryptedEntries.containsKey(accountName);
+    }
+
+    @Override
+    public String getEntry(String accountName) {
+        return encryptedEntries.get(accountName);
+    }
+
+    @Override
+    public void updateEntry(String accountName, String newEntry) {
+        this.encryptedEntries.replace(accountName, newEntry);
+    }
+
     public void save() {
         persistence.save(salt, encryptedMasterPassword, encryptedEntries);
     }
