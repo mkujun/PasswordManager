@@ -25,8 +25,10 @@ TUI, the app automatically **falls back to a plain console interface**.
   - `IPersistenceService` → file I/O
   - `IPasswordRepository` → data management
   - `ICryptoService` → encryption/decryption
-  - `IPasswordManager` → console-mode CLI logic
+  - `IPasswordsService` → business logic (login, master password, entry CRUD),
+    shared by both front-ends
   - `tui/*` → Lanterna screens (TUI mode)
+  - `Konzola` → plain console UI (fallback mode)
 * 🧹 Add, view, search, update, and remove password entries
 * ✅ No need to save any key files!
 * ✅ Unit tested with **JUnit 4** and **Mockito**
@@ -39,11 +41,13 @@ The entry point is `Main`, which selects the interface at startup:
 
 1. **TUI (default)** — `Main` tries to launch the Lanterna UI (`tui.Lanterna`).
 2. **Plain console (fallback)** — if the TUI cannot start (e.g. the terminal does not
-   support it), `Main` falls back to the console flow driven by
-   `manager.PasswordManager`.
+   support it), `Main` falls back to the console UI in `Konzola`.
 
-> ℹ️ The master password must already be set before the TUI can be used. If no master
-> password exists yet, run the app in console mode once to create it.
+Both front-ends use the same `service.PasswordsService` instance, created in `Main`.
+
+> ℹ️ On first start (no master password yet) both front-ends offer a signup flow to
+> create the master password: the `Signup` screen in the TUI, or a prompt in console
+> mode.
 
 ---
 
@@ -58,28 +62,30 @@ project-root/
  │   │   ├── ICryptoService.java
  │   │   ├── IPersistenceService.java
  │   │   ├── IPasswordRepository.java
- │   │   └── IPasswordManager.java
+ │   │   └── IPasswordsService.java
  │   ├── crypto/
  │   │   └── CryptoService.java
  │   ├── persistence/
  │   │   └── PersistenceService.java
  │   ├── repository/
  │   │   └── PasswordRepository.java
- │   ├── manager/
- │   │   └── PasswordManager.java        # console-mode orchestration
+ │   ├── service/
+ │   │   └── PasswordsService.java       # business logic shared by both UIs
  │   ├── model/
  │   │   └── PasswordEntry.java
  │   ├── tui/                            # Lanterna TUI (default mode)
  │   │   ├── Lanterna.java               # TUI entry / flow controller
+ │   │   ├── Signup.java
  │   │   ├── Login.java
  │   │   ├── MainMenu.java
  │   │   ├── PasswordList.java
  │   │   ├── AddPassword.java
  │   │   ├── AppScreen.java              # base screen (shared window/exit handling)
  │   │   └── Theme.java
+ │   ├── Konzola.java                    # plain console UI (fallback mode)
  │   └── Main.java                       # app entry point (TUI, console fallback)
  ├── test/
- │   ├── PasswordManagerTest.java
+ │   ├── PasswordsServiceTest.java
  │   ├── CryptoServiceTest.java
  │   ├── PasswordRepositoryTest.java
  │   ├── PersistenceServiceTest.java
@@ -162,7 +168,7 @@ java -cp ".;lib/*;out" org.junit.runner.JUnitCore ^
   PersistenceServiceTest ^
   PasswordRepositoryTest ^
   CryptoServiceTest ^
-  PasswordManagerTest
+  PasswordsServiceTest
 ```
 
 > 💡 On macOS/Linux, replace `;` with `:` in the classpath and `^` with `\` for line
@@ -175,7 +181,7 @@ JUnit version 4.13.1
 ........
 Time: 2.8xx
 
-OK (42 tests)
+OK (37 tests)
 ```
 
 ---

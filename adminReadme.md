@@ -14,22 +14,23 @@ It is intended for **developers and maintainers**, not end users.
 
 The application follows a **layered architecture** with **explicit separation of concerns**.
 
-There are two front-ends on top of a shared core. `Main` picks the front-end at
-startup: it tries the TUI first and falls back to the console flow if the TUI cannot
+There are two front-ends on top of a shared service layer. `Main` picks the front-end
+at startup: it tries the TUI first and falls back to the console UI if the TUI cannot
 start.
 
 ```
 ┌──────────────────────────────┐        ┌──────────────────────────────┐
-│   tui.Lanterna (TUI, default) │        │  PasswordManager (console)    │ ← Front-ends
+│   tui.Lanterna (TUI, default) │        │   Konzola (console fallback)  │ ← Front-ends (UI only)
 └───────────────▲──────────────┘        └───────────────▲──────────────┘
                 │                                        │
                 └────────────────┬───────────────────────┘
-                                 │
+                                 │  IPasswordsService
                    ┌─────────────┴───────────────┐
-                   │          Interfaces          │ ← Contracts (ICryptoService,
-                   │                              │   IPasswordRepository, ...)
+                   │   service.PasswordsService   │ ← Business logic
+                   │                              │   (login, master password,
+                   │                              │   entry CRUD, encryption calls)
                    └─────────────▲───────────────┘
-                                 │
+                                 │  ICryptoService, IPasswordRepository
                    ┌─────────────┴───────────────┐
                    │       Implementations        │ ← CryptoService,
                    │                              │   PasswordRepository,
@@ -50,25 +51,26 @@ This keeps the system **testable, maintainable, and extensible**.
 
 ## 2. Entry Point & UI Selection
 
-The single entry point is `Main`. It wires up the core services and then chooses the
-user interface:
+The single entry point is `Main`. It wires up the core services once, creates one
+`PasswordsService`, and passes it to whichever front-end runs:
 
 ```java
+IPasswordsService passwordsService = new PasswordsService(cryptoService, repository);
+
 try {
     // Default: launch the Lanterna TUI.
-    new Lanterna().run();
+    new Lanterna(passwordsService).run();
 } catch (Exception e) {
     // Fallback: plain console interface.
-    passwordManager.start();
+    new Konzola(passwordsService).auth();
 }
 ```
 
 ### Consequences
 - The **TUI is the default** experience; the console mode is a **fallback** for
   terminals that cannot run Lanterna.
-- `tui.Lanterna` currently **constructs its own core services**
-  (`CryptoService`, `PasswordRepository`, `PersistenceService`) instead of reusing the
-  instances created in `Main`. This is a known duplication (see §10).
+- Both front-ends share **the same service instance**, so login, master-password and
+  entry logic exist in exactly one place.
 
 ---
 
@@ -78,7 +80,7 @@ try {
 - `ICryptoService`
 - `IPasswordRepository`
 - `IPersistenceService`
-- `IPasswordManager`
+- `IPasswordsService`
 
 ### Reasons
 
@@ -88,7 +90,7 @@ The front-ends do **not care**:
 - how data is stored
 - where persistence lives
 
-They only care about **what operations are available**.
+They only call `IPasswordsService` operations.
 
 #### 2️⃣ Testability
 Interfaces allow us to:
@@ -115,33 +117,42 @@ Later it can:
 
 ## 4. Responsibility Breakdown
 
-### 4.1 Front-ends (Application Layer)
+### 4.1 Front-ends (UI Layer)
 
-Two interchangeable front-ends share the same responsibilities toward the user:
-- user interaction (TUI screens or console prompts)
-- authentication flow
-- business rules / input validation
-- orchestration between services (including triggering encryption/decryption)
+Two interchangeable front-ends. They handle only user interaction and input
+validation (e.g. empty fields, password confirmation) and delegate everything else to
+`IPasswordsService`.
 
-**tui.Lanterna** — the default TUI. Owns a set of screens:
-- `Login` — master-password entry and validation
+**tui.Lanterna** — the default TUI and flow controller. Owns a set of screens:
+- `Signup` — first-start master-password creation (double entry, show/hide)
+- `Login` — master-password entry
 - `MainMenu` — navigation hub
 - `PasswordList` — view / edit / delete entries
 - `AddPassword` — create / edit a single entry
 - `AppScreen` — shared base screen (full-screen window, Q/ESC exit handling)
 - `Theme` — color palette for the terminal UI
 
-**manager.PasswordManager** — the console fallback. Same orchestration role, driven by
-text prompts instead of screens.
+**Konzola** — the console fallback. Same flow (signup / login / menu), driven by text
+prompts instead of screens.
 
 What the front-ends do **NOT** do:
-- encryption internals
+- encryption or key handling
 - file I/O
 - data storage logic
 
-This follows the Single Responsibility Principle (SRP).
+### 4.2 PasswordsService (Business Logic Layer)
 
-### 4.2 CryptoService (Security Layer)
+#### Responsibilities
+- Master password: `masterPasswordExists`, `setMasterPassword`, `login`
+- Holds the derived `SecretKey` for the session (set only after a successful login
+  or signup)
+- Entry operations: `viewPasswords` (with account-name filter), `getPasswordEntry`,
+  `accountExists`, `addPasswordEntry`, `updatePasswordEntry`,
+  `deletePasswordEntry`, `deleteAllEntries`
+- Encrypts entries before handing them to the repository and decrypts them on read
+- Saves the repository after every change
+
+### 4.3 CryptoService (Security Layer)
 
 #### Responsibilities
 - Key derivation using PBKDF2
@@ -155,16 +166,16 @@ This follows the Single Responsibility Principle (SRP).
 
 Explicitly avoid mixing crypto logic into repositories.
 
-### 4.3 PasswordRepository (Domain Storage Layer)
+### 4.4 PasswordRepository (Domain Storage Layer)
 
 #### Responsibilities
-- In-memory storage of password entries
+- In-memory storage of encrypted password entries
 - Enforcing uniqueness
 - Managing master password metadata (salt, encrypted master password)
 - Delegating persistence
 
 #### Design choice
-- Uses `Map<String, PasswordEntry>` instead of `List`
+- Uses `Map<String, String>` (account name → encrypted entry) instead of `List`
 
 #### Why Map
 - O(1) lookup by account name
@@ -172,7 +183,7 @@ Explicitly avoid mixing crypto logic into repositories.
 - Cleaner update/remove logic
 - Repository does NOT encrypt/decrypt — it stores what it is given.
 
-### 4.4 PersistenceService (Infrastructure Layer)
+### 4.5 PersistenceService (Infrastructure Layer)
 
 #### Responsibilities
 - Save/load data from disk
@@ -187,14 +198,13 @@ Explicitly avoid mixing crypto logic into repositories.
 
 ---
 
-## 5. Why Encryption Happens in the Application Layer (Not the Repository)
+## 5. Why Encryption Happens in the Service Layer (Not the Repository)
 
 ### Decision
-> The application/UI layer encrypts → the repository stores.
+> `PasswordsService` encrypts → the repository stores.
 
-In console mode `PasswordManager` performs the encryption; in TUI mode `tui.Lanterna`
-calls `CryptoService` directly (e.g. `encryptEntry` / `decryptEntry`). In both cases the
-repository only ever receives already-encrypted data.
+Neither front-end calls `CryptoService` directly. The repository only ever receives
+already-encrypted data.
 
 ### Why?
 - Encryption is a business rule, not storage logic
@@ -210,20 +220,27 @@ This avoids:
 
 ## 6. Authentication Design
 
-### Master Password Flow
+### Signup (first start)
+1. A random salt is generated and stored
+2. The key is derived from the master password and the salt
+3. The master password is encrypted with that key and stored
+4. The repository is saved
+
+### Login
 1. User enters password
 2. Key is derived using the stored salt
 3. Entered password is encrypted
 4. Encrypted value is compared against the stored encrypted master password
+5. Only on success is the derived key kept for the session
 
-Both front-ends use the same logic: the TUI `Login` flow in `tui.Lanterna.validateUser()`
-mirrors `PasswordManager.authenticate()`.
+Both front-ends use the same logic: `PasswordsService.setMasterPassword()` and
+`PasswordsService.login()`.
 
 ### Security Decisions
 - PBKDF2WithHmacSHA256
 - Random per-user salt
 - No plaintext passwords stored
-- 3 login attempts limit (see the limitation in §10)
+- No login attempt limit (deliberate decision)
 
 ---
 
@@ -240,10 +257,10 @@ mirrors `PasswordManager.authenticate()`.
 | CryptoService      | Real unit tests        | Validate crypto correctness  |
 | PasswordRepository | Unit tests             | Business rules, map behavior |
 | PersistenceService | Integration-like tests | File save/load integrity     |
-| PasswordManager    | Mock-based tests       | Business flow, orchestration |
+| PasswordsService   | Mock-based tests       | Business flow, orchestration |
 | PasswordEntry      | Unit tests             | Model/builder behavior       |
 
-> The TUI layer (`tui.*`) is currently **not covered** by automated tests.
+> The UI layer (`tui.*` and `Konzola`) is currently **not covered** by automated tests.
 
 ### Why Mock
 - Avoid file system dependency
@@ -275,9 +292,9 @@ This balances:
 
 ## 9. Why Manual Dependency Injection
 
-Dependencies are injected manually:
+Dependencies are injected manually in `Main`:
 ```java
-new PasswordManager(new CryptoService(), new PasswordRepository(...))
+new PasswordsService(new CryptoService(), new PasswordRepository(...))
 ```
 
 ### Why?
@@ -290,25 +307,25 @@ new PasswordManager(new CryptoService(), new PasswordRepository(...))
 
 ## 10. Known Limitations / TODO
 
-- **TUI builds its own services.** `tui.Lanterna` instantiates `CryptoService`,
-  `PasswordRepository` and `PersistenceService` itself instead of receiving the
-  instances created in `Main`. Consider injecting them for consistency with the
-  console path.
-- **Duplicated auth logic.** `tui.Lanterna.validateUser()` and
-  `PasswordManager.authenticate()` implement the same master-password check. Consider
-  extracting a shared authentication helper.
-- **Login attempt limit is cosmetic.** The 3-attempt limit only ends the current
-  session; it does not lock the app against repeated restarts.
+- **Master password change is not atomic.** `Konzola.updateMasterPassword()` reads
+  all entries, calls `deleteAllEntries()`, then sets the new master password and
+  re-adds the entries. A failure in between can lose data. Better: compute everything
+  new first (salt, key, re-encrypted entries) and only then replace the repository
+  state and save, ideally as one `PasswordsService` operation. The TUI has no master
+  password change yet.
 - **Settings screen is a placeholder.** `tui.Lanterna.showSettingsScreen()` only shows
   a "not implemented yet" dialog.
-- **No automated tests for the TUI layer.**
+- **No service-side validation.** Empty master password / required fields are checked
+  only in the UI.
+- **No automated tests for the UI layer.**
 
 ---
 
 ## 11. Current & Future Extension Points
 
 ### Already implemented
-- **TUI front-end** (Lanterna) alongside the console interface.
+- **TUI front-end** (Lanterna) alongside the console interface, both on one shared
+  service.
 
 ### Future
 Because of the current design, it is straightforward to add:
