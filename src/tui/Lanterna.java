@@ -9,14 +9,9 @@ import com.googlecode.lanterna.screen.TerminalScreen;
 import com.googlecode.lanterna.terminal.DefaultTerminalFactory;
 import com.googlecode.lanterna.terminal.Terminal;
 
-import crypto.CryptoService;
-import interfaces.ICryptoService;
-import interfaces.IPasswordRepository;
+import interfaces.IPasswordsService;
 import model.PasswordEntry;
-import persistence.PersistenceService;
-import repository.PasswordRepository;
 
-import javax.crypto.SecretKey;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,26 +31,26 @@ import java.util.Map;
 public class Lanterna {
     private static final String FILE_NAME = "passwords.dat";
 
-    private final ICryptoService crypto = new CryptoService();
-    private final IPasswordRepository repository =
-            new PasswordRepository(new PersistenceService(FILE_NAME));
+    private final IPasswordsService passwordsService;
 
     private final SimpleTheme theme = Theme.getTheme();
 
-    private SecretKey secretKey;
-
     private Login loginWindow;
+    private Signup signupWindow;
     private MainMenu mainMenu;
-
-    // todo: remove this, user can guess any number of times
-    // it is not that the app can lock itself from further usage
-    private int loginAttempts = 3;
 
     public MultiWindowTextGUI gui;
 
+    public Lanterna(IPasswordsService passwordsService) {
+        this.passwordsService = passwordsService;
+    }
+
+    /*
     public static void main(String[] args) throws Exception {
         new Lanterna().run();
     }
+
+     */
 
     public void run() throws Exception {
         DefaultTerminalFactory factory = new DefaultTerminalFactory()
@@ -70,7 +65,12 @@ public class Lanterna {
 
         try {
             gui = new MultiWindowTextGUI(screen);
-            showLoginScreen();
+            if (passwordsService.masterPasswordExists()) {
+                showLoginScreen();
+            }
+            else {
+                showSignupScreen();
+            }
         } finally {
             screen.stopScreen();
         }
@@ -80,12 +80,18 @@ public class Lanterna {
     private void showLoginScreen() {
         loginWindow = new Login(theme, this::login);
 
-        if (repository.getEncryptedMasterPassword() == null
-                || repository.getEncryptedMasterPassword().isEmpty()) {
-            loginWindow.showError("No master password set. Run the CLI app first.");
-        }
-
         gui.addWindowAndWait(loginWindow.getWindow());
+    }
+
+    private void showSignupScreen() {
+        signupWindow = new Signup(theme, this::signup);
+        gui.addWindowAndWait(signupWindow.getWindow());
+    }
+
+    private void signup() {
+        String enteredPassword = signupWindow.getEnteredPassword();
+        passwordsService.setMasterPassword(enteredPassword);
+        signupWindow.showSuccess("Master password created");
     }
 
     private void login() {
@@ -93,15 +99,10 @@ public class Lanterna {
 
         if (validateUser(enteredPassword)) {
             showMainMenu();
-        } else {
-            loginAttempts--;
-            if (loginAttempts == 0) {
-                loginWindow.showError("Too many failed attempts. Exiting.");
-                loginWindow.close();
-            } else {
-                loginWindow.showError("Incorrect password. Attempts left: " + loginAttempts);
-                loginWindow.clearPassword();
-            }
+        }
+        else {
+            loginWindow.showError("Incorrect password. Try again.");
+            loginWindow.clearPassword();
         }
     }
 
@@ -110,14 +111,7 @@ public class Lanterna {
      * PasswordManager.authenticate().
      */
     private boolean validateUser(String enteredPassword) {
-        SecretKey key = crypto.deriveKey(enteredPassword, repository.getSalt());
-        String encryptedEntered = crypto.encrypt(enteredPassword, key);
-
-        if (encryptedEntered.equals(repository.getEncryptedMasterPassword())) {
-            this.secretKey = key; // keep the key for later screens
-            return true;
-        }
-        return false;
+        return passwordsService.login(enteredPassword);
     }
 
     /**
@@ -140,22 +134,15 @@ public class Lanterna {
         }
     }
 
-    // todo: extract this onDelete into separate function
     /** Shows the password list screen. */
     private void showPasswordListScreen() {
-        Map<String, String> entries = repository.getEntries();
-        List<PasswordEntry> passwordEntries = new ArrayList<>();
-        entries.forEach((key, value) -> {
-            passwordEntries.add(crypto.decryptEntry(value, secretKey));
-        });
+        Map<String, PasswordEntry> entries = passwordsService.viewPasswords("");
+        List<PasswordEntry> passwordEntries = new ArrayList<PasswordEntry>(entries.values());
 
         PasswordList passwordList = new PasswordList(theme, passwordEntries);
         passwordList.setOnDelete(entry -> {
-            boolean removed = repository.remove(entry.getAccountName());
-            if (removed) {
-                repository.save();
-            }
-            return removed;
+            passwordsService.deletePasswordEntry(entry.getAccountName());
+            return !passwordsService.accountExists(entry.getAccountName());
         });
         passwordList.setOnEdit(this::editEntry);
         gui.addWindowAndWait(passwordList.getWindow());
@@ -206,11 +193,7 @@ public class Lanterna {
                     .accountActive(entry.isAccountActive())
                     .build();
 
-            Map<String, String> encryptedEntries = repository.getEntries();
-            encryptedEntries.replace(entry.getAccountName(),
-                    crypto.encryptEntry(updated, secretKey));
-            repository.importEntries(encryptedEntries);
-            repository.save();
+            passwordsService.updatePasswordEntry(entry.getAccountName(), updated);
 
             // Persisted -> reflect the change in the in-memory entry.
             entry.setUsername(username);
@@ -259,22 +242,20 @@ public class Lanterna {
             }
 
             // Reject duplicate account names.
-            if (!repository.find(account).isEmpty()) {
+            if (passwordsService.accountExists(account)) {
                 addScreen.showError("An account with that name already exists.");
                 return;
             }
 
-            String encrypted = crypto.encryptEntry(
-                    new PasswordEntry.Builder(account)
-                            .username(username)
-                            .password(password)
-                            .notes(notes)
-                            .url(url)
-                            .build(),
-                    secretKey);
+            PasswordEntry entry = new PasswordEntry.Builder(account)
+                    .username(username)
+                    .password(password)
+                    .notes(notes)
+                    .url(url)
+                    .build();
 
-            if (repository.addEncryptedEntry(encrypted, account)) {
-                repository.save();
+            passwordsService.addPasswordEntry(entry);
+            if (passwordsService.accountExists(account)) {
                 addScreen.close();
             } else {
                 addScreen.showError("Could not save the password. Try again.");
