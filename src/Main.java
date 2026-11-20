@@ -2,7 +2,6 @@ import service.PasswordsService;
 import crypto.CryptoService;
 import persistence.PersistenceService;
 import repository.PasswordRepository;
-import manager.PasswordManager;
 import interfaces.*;
 import tui.Lanterna;
 
@@ -13,7 +12,6 @@ public class Main {
         ICryptoService cryptoService = new CryptoService();
         IPersistenceService persistenceService = new PersistenceService(FILE_NAME);
         IPasswordRepository repository = new PasswordRepository(persistenceService);
-        IPasswordManager passwordManager = new PasswordManager(cryptoService, repository);
 
         IPasswordsService bl = new PasswordsService(cryptoService, repository);
 
