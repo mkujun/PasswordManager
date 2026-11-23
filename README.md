@@ -89,7 +89,17 @@ project-root/
  │   ├── CryptoServiceTest.java
  │   ├── PasswordRepositoryTest.java
  │   ├── PersistenceServiceTest.java
- │   └── PasswordEntryTest.java
+ │   ├── PasswordEntryTest.java
+ │   ├── KonzolaTest.java                # console UI (scripted System.in)
+ │   └── tui/                            # TUI tests on a virtual terminal
+ │       ├── TuiTestSupport.java         # helper, not a test class
+ │       ├── LanternaTest.java
+ │       ├── SignupTest.java
+ │       ├── LoginTest.java
+ │       ├── MainMenuTest.java
+ │       ├── PasswordListTest.java
+ │       ├── AddPasswordTest.java
+ │       └── ThemeTest.java
  ├── lib/
  │   ├── lanterna-3.1.5.jar
  │   ├── junit-4.13.1.jar
@@ -168,20 +178,32 @@ java -cp ".;lib/*;out" org.junit.runner.JUnitCore ^
   PersistenceServiceTest ^
   PasswordRepositoryTest ^
   CryptoServiceTest ^
-  PasswordsServiceTest
+  PasswordsServiceTest ^
+  KonzolaTest ^
+  tui.LanternaTest ^
+  tui.SignupTest ^
+  tui.LoginTest ^
+  tui.MainMenuTest ^
+  tui.PasswordListTest ^
+  tui.AddPasswordTest ^
+  tui.ThemeTest
 ```
 
 > 💡 On macOS/Linux, replace `;` with `:` in the classpath and `^` with `\` for line
 > continuation.
+
+The TUI tests are in package `tui` (folder `test/tui/`), so their class names are
+prefixed with `tui.`. They run the Lanterna screens on an in-memory
+`DefaultVirtualTerminal`, so no real terminal is needed and nothing is drawn.
 
 If all tests pass, you’ll see something like:
 
 ```
 JUnit version 4.13.1
 ........
-Time: 2.8xx
+Time: 8.4xx
 
-OK (37 tests)
+OK (214 tests)
 ```
 
 ---

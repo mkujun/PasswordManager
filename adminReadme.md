@@ -259,8 +259,14 @@ Both front-ends use the same logic: `PasswordsService.setMasterPassword()` and
 | PersistenceService | Integration-like tests | File save/load integrity     |
 | PasswordsService   | Mock-based tests       | Business flow, orchestration |
 | PasswordEntry      | Unit tests             | Model/builder behavior       |
+| Konzola            | Mock service + scripted `System.in` | Console flows and messages |
+| tui.* screens      | Virtual terminal tests | Widgets, keys, callbacks, dialogs |
+| tui.Lanterna       | Virtual terminal + queued key strokes | Screen-to-service flows |
 
-> The UI layer (`tui.*` and `Konzola`) is currently **not covered** by automated tests.
+> UI tests run Lanterna on `DefaultVirtualTerminal` (helper `test/tui/TuiTestSupport`).
+> Blocking calls (`addWindowAndWait`, dialogs) consume key strokes queued on the
+> virtual terminal beforehand. Not covered: `Main` and `Lanterna.run()`, which open a
+> real system terminal.
 
 ### Why Mock
 - Avoid file system dependency
@@ -317,7 +323,7 @@ new PasswordsService(new CryptoService(), new PasswordRepository(...))
   a "not implemented yet" dialog.
 - **No service-side validation.** Empty master password / required fields are checked
   only in the UI.
-- **No automated tests for the UI layer.**
+- **Entry point not tested.** `Main` and `Lanterna.run()` need a real terminal.
 
 ---
 
